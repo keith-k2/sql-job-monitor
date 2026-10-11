@@ -1,87 +1,91 @@
 # SQL Job Monitor
 
-A native Windows desktop monitor for SQL Server Agent jobs, built with Rust and Slint.
+A native Windows desktop app for watching and controlling SQL Server Agent jobs. Connect once, then monitor activity, inspect history, and start or stop jobs without opening SQL Server Management Studio.
 
-## MVP features
+**[Download the Windows installer](https://github.com/keith-k2/sql-job-monitor/releases/latest)**
 
-- Current Windows account (SSPI) and SQL Server authentication
-- Default TLS certificate validation, with an explicit certificate override
-- Host/port and `SERVER\INSTANCE` connections through SQL Server Browser
-- Auto-refreshing job state, last result, duration, current step, and next run
-- Search, status filters, and sortable name/status/last-run columns
-- Recent job and step history
-- Guarded start and stop controls
-- Last-good-data retention and actionable connection/permission errors
+Windows 10 or later. The installer adds SQL Job Monitor to the Start menu.
 
-SQL Server Agent is not available in SQL Server Express. Azure Elastic Jobs are outside this
-MVP's scope.
+## What it does
 
-## Prerequisites
+- Connect with the current Windows account or a SQL Server login, including named instances.
+- See every job’s status, enabled state, current step, last run, duration, next run, owner, and category.
+- Filter by status, search, sort, and resize columns. Running jobs stay pinned at the top.
+- Open recent history and the steps inside each run.
+- Switch to a zoomable timeline that shows how long each job and step took.
+- Start a job, start it at a chosen step, stop it, or enable and disable it.
+- Refresh manually or on a timer. The last successful connection signs in again the next time the app starts.
+- Remember the window layout, theme, and history pane. A pin keeps the window above other windows.
 
-1. Windows 10 or later.
-2. The current stable Rust toolchain from [rustup](https://rustup.rs/).
-3. SQL Server TCP/IP enabled. Named instances also need SQL Server Browser and UDP 1434.
-4. A SQL Server login or Windows account that can read SQL Server Agent metadata.
+SQL Server Agent is not available in SQL Server Express. Azure Elastic Jobs are outside this app’s scope.
 
-Recommended `msdb` role membership:
+## Install
 
-- `SQLAgentReaderRole` for monitoring jobs visible to the account.
-- `SQLAgentOperatorRole` to start/stop eligible local jobs.
-- `sysadmin` is not required and should not be granted solely for this application.
+1. Open the [latest release](https://github.com/keith-k2/sql-job-monitor/releases/latest).
+2. Download `sql-job-monitor-0.1.0-x86_64.msi`.
+3. Run the installer. Windows asks for administrator approval because the app is installed for all users on the computer.
+4. Launch **SQL Job Monitor** from the Start menu.
 
-SQL Server Agent roles still enforce ownership and visibility rules documented by Microsoft.
+To remove it, use **Apps** in Windows Settings.
 
-## Build and run
+## Connect
+
+The login needs permission to read SQL Server Agent metadata in `msdb`.
+
+- `SQLAgentReaderRole` can monitor the jobs that account is allowed to see.
+- `SQLAgentOperatorRole` can also start and stop eligible local jobs.
+- `sysadmin` is not required.
+
+SQL Server must accept TCP/IP connections. A named instance also needs SQL Server Browser and UDP 1434, unless you enter its fixed port.
+
+Certificate validation stays on unless **Trust server certificate** is checked for that connection. Use that override only for a server whose certificate cannot be validated.
+
+## Build from source
+
+Install the current stable Rust toolchain from [rustup](https://rustup.rs/), then:
 
 ```powershell
-cargo run
+cargo run --release
 ```
 
-Quality checks:
+The executable is written to `target\release\sql-job-monitor.exe`.
+
+Checks:
 
 ```powershell
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
-cargo build --release
 ```
 
-The portable executable is created at `target\release\sql-job-monitor.exe`.
-
-## Test against a SQL Server
-
-Live tests are ignored by default. Windows authentication only needs the server variable:
+Live SQL tests stay ignored unless a server is provided:
 
 ```powershell
 $env:SQL_JOB_MONITOR_TEST_SERVER = 'SERVER\INSTANCE'
 cargo test --test sql_integration -- --ignored
 ```
 
-For SQL authentication, also set `SQL_JOB_MONITOR_TEST_USER` and
-`SQL_JOB_MONITOR_TEST_PASSWORD`. Set `SQL_JOB_MONITOR_TEST_PORT` for a fixed port or
-`SQL_JOB_MONITOR_TEST_TRUST_CERT=1` only for a development server whose certificate cannot be
-validated.
+For a SQL login, also set `SQL_JOB_MONITOR_TEST_USER` and `SQL_JOB_MONITOR_TEST_PASSWORD`. Set `SQL_JOB_MONITOR_TEST_PORT` for a fixed port, or `SQL_JOB_MONITOR_TEST_TRUST_CERT=1` only for a development server.
 
-## Windows MSI
+### Installer
 
-Install the packaging command and WiX Toolset 3.14 once, then build:
+The MSI is built with [cargo-wix](https://github.com/volks73/cargo-wix) and WiX Toolset 3.14:
 
 ```powershell
 cargo install cargo-wix
-cargo wix
+cargo wix --bin-path C:\path\to\wix314
 ```
 
-The MSI is written under `target\wix`. The installer metadata and stable upgrade identifiers are
-in `Cargo.toml` and `wix\main.wxs`. If WiX is kept as portable binaries instead of installed,
-pass its directory with `cargo wix --bin-path C:\path\to\wix314`.
+`target\wix\sql-job-monitor-0.1.0-x86_64.msi` is the installer. Its upgrade identifiers live in `Cargo.toml` and `wix\main.wxs`.
 
 ## Security
 
-- A connection is saved only when **Remember this connection** is checked and the login succeeds.
-- Saved server settings are stored in `%APPDATA%\SQL Job Monitor\connections.json`. SQL passwords are stored in Windows Credential Manager for the current Windows user, not in that file.
-- Passwords and full connection strings are never logged.
-- TLS encryption and Windows certificate validation are enabled by default.
-- “Trust server certificate” is an explicit per-connection override. It encrypts traffic but
-  disables identity validation and should be limited to controlled development environments.
-- Query and connection operations time out, and UI updates reject stale refresh results.
+- A connection is saved only after a successful login when **Remember this connection** is checked.
+- Server settings are stored in `%APPDATA%\SQL Job Monitor\connections.json`. SQL passwords go to Windows Credential Manager for the current Windows user, not into that file.
+- Passwords and connection strings are not written to logs.
+- Connections use TLS. Trusting the server certificate is an explicit, per-connection choice.
+- Queries time out, and a newer refresh replaces an older result that arrives late.
 
+## License
+
+[MIT](LICENSE). The icons in `assets/lucide` are from [Lucide](https://lucide.dev/) and use the ISC license included in that folder.

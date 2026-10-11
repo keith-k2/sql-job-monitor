@@ -608,7 +608,7 @@ component AppTitleBar inherits Rectangle {
     in property <bool> maximized: false;
     callback theme-clicked();
     callback pin-clicked();
-    callback github-clicked();
+    callback coffee-clicked();
     callback minimize-clicked();
     callback maximize-clicked();
     callback close-clicked();
@@ -672,12 +672,12 @@ component AppTitleBar inherits Rectangle {
                 }
             }
             CaptionIcon {
-                tip: "GitHub";
-                clicked => { root.github-clicked(); }
+                tip: "Buy me a coffee";
+                clicked => { root.coffee-clicked(); }
                 LucideIcon {
                     x: 10px;
                     y: 8px;
-                    source: @image-url("../assets/lucide/github.svg");
+                    source: @image-url("../assets/lucide/coffee.svg");
                 }
             }
 
@@ -914,7 +914,7 @@ export component MainWindow inherits Window {
     callback categories-set-all(bool);
     callback saved-login-requested(string);
     callback saved-delete-requested(string);
-    callback open-github-requested();
+    callback open-coffee-requested();
     callback timeline-requested(int);
     callback persist-requested();
 
@@ -1684,12 +1684,6 @@ export component MainWindow inherits Window {
                             }
                         }
                         Rectangle { y: parent.height - 1px; height: 1px; background: Theme.border; }
-                        Rectangle {
-                            width: root.timeline-name-width;
-                            height: parent.height;
-                            background: Theme.menu;
-                            Rectangle { x: parent.width - 1px; width: 1px; height: parent.height; background: Theme.border; }
-                        }
                     }
 
                     timeline-scroll := ScrollView {
@@ -2375,7 +2369,7 @@ export component MainWindow inherits Window {
         maximized: root.maximized;
         theme-clicked => { Theme.mode = mod(Theme.mode + 1, 3); root.persist-requested(); }
         pin-clicked => { root.pinned = !root.pinned; root.persist-requested(); }
-        github-clicked => { root.open-github-requested(); }
+        coffee-clicked => { root.open-coffee-requested(); }
         minimize-clicked => { root.minimized = true; }
         maximize-clicked => { root.maximized = !root.maximized; }
         close-clicked => { root.close(); }

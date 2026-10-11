@@ -242,6 +242,41 @@ fn move_job_selection(ui: &MainWindow, delta: i32) {
     ui.set_selection_scroll_tick(ui.get_selection_scroll_tick().wrapping_add(1));
 }
 
+fn open_in_browser(url: &str) {
+    use std::os::windows::ffi::OsStrExt;
+    let operation: Vec<u16> = std::ffi::OsStr::new("open")
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let file: Vec<u16> = std::ffi::OsStr::new(url)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    // ShellExecuteW hands the URL to the default browser and never creates a console.
+    let _ = unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            operation.as_ptr(),
+            file.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            1,
+        )
+    };
+}
+
+#[link(name = "shell32")]
+extern "system" {
+    fn ShellExecuteW(
+        hwnd: *mut core::ffi::c_void,
+        operation: *const u16,
+        file: *const u16,
+        parameters: *const u16,
+        directory: *const u16,
+        show: i32,
+    ) -> isize;
+}
+
 fn refreshed_ago(epoch: i32) -> String {
     if epoch <= 0 {
         return "Not updated yet".to_owned();
@@ -491,6 +526,10 @@ impl Application {
         publish_saved(&self.ui);
         fill_saved_form(&self.ui, &settings.last_connection_id);
         self.install_callbacks();
+        if !settings.last_connection_id.is_empty() {
+            self.ui
+                .invoke_saved_login_requested(settings.last_connection_id.clone().into());
+        }
         enable_dark_title_bar(&self.ui);
         let ui_weak = self.ui.as_weak();
         self.runtime.spawn(async move {
@@ -525,10 +564,8 @@ impl Application {
         self.install_connection_callbacks();
         self.install_grid_callbacks();
         self.install_command_callbacks();
-        self.ui.on_open_github_requested(|| {
-            let _ = std::process::Command::new("cmd")
-                .args(["/C", "start", "", "https://github.com/keith-k2"])
-                .spawn();
+        self.ui.on_open_coffee_requested(|| {
+            open_in_browser("https://buymeacoffee.com/keithr");
         });
 
         let ui_weak = self.ui.as_weak();
