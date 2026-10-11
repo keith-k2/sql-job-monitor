@@ -1,0 +1,40 @@
+[package]
+name = "sql-job-monitor"
+version = "0.1.0"
+edition = "2021"
+description = "A fast native Windows monitor for SQL Server Agent jobs"
+authors = ["SQL Job Monitor Contributors"]
+license = "MIT"
+build = "build.rs"
+
+[dependencies]
+anyhow = "1.0"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+keyring = "3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+slint = { version = "1.13", features = ["unstable-winit-030"] }
+thiserror = "2.0"
+tiberius = { version = "0.13", features = ["chrono", "native-tls", "sql-browser-tokio", "winauth"] }
+tokio = { version = "1.47", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
+tokio-util = { version = "0.7", features = ["compat", "rt"] }
+uuid = { version = "1.18", features = ["v4"] }
+zeroize = { version = "1.8", features = ["derive"] }
+
+[build-dependencies]
+slint-build = "1.13"
+winresource = "0.1"
+
+[dev-dependencies]
+pretty_assertions = "1.4"
+
+[package.metadata.wix]
+upgrade-guid = "D2B047CC-2226-4CD7-A11D-B03911484A32"
+path-guid = "18517DA9-61D7-4532-A0A4-B592FF140928"
+license = false
+eula = false
+
+[profile.release]
+lto = "thin"
+strip = true
+

@@ -1,0 +1,6 @@
+/target/
+*.msi
+*.wixobj
+*.wixpdb
+.env
+

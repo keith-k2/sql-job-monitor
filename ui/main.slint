@@ -1,0 +1,2153 @@
+import { Button, CheckBox, LineEdit, Palette, ScrollView, SpinBox } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+export { Theme, Columns }
+
+export struct JobRow {
+    id: string,
+    name: string,
+    enabled: bool,
+    running: bool,
+    status: string,
+    current-step: string,
+    last-run: string,
+    duration: string,
+    next-run: string,
+    owner: string,
+    category: string,
+}
+
+export struct SavedConnectionRow {
+    id: string,
+    label: string,
+    detail: string,
+}
+
+export struct CategoryChoice {
+    name: string,
+    checked: bool,
+}
+
+export struct JobStepRow {
+    name: string,
+    label: string,
+}
+
+export struct HistoryRow {
+    run-at: string,
+    step: string,
+    outcome: string,
+    duration: string,
+    message: string,
+    details-open: bool,
+}
+
+export struct TimelineBarRow {
+    start: float,
+    length: float,
+    status: string,
+    label: string,
+    detail: string,
+    is-step: bool,
+}
+
+export struct TimelineLaneRow {
+    id: string,
+    name: string,
+    status: string,
+    current-step: string,
+    bars: [TimelineBarRow],
+}
+
+export struct StatusCountRow {
+    label: string,
+    count: int,
+}
+
+export struct HistoryRunRow {
+    run-at: string,
+    outcome: string,
+    duration: string,
+    message: string,
+    expanded: bool,
+    description-open: bool,
+    steps: [HistoryRow],
+}
+
+global JobColors {
+    public pure function tint(status: string) -> color {
+        if status == "Failed" { return Theme.fail; }
+        if status == "Running" || status == "In progress" { return Theme.info; }
+        if status == "Succeeded" { return Theme.ok; }
+        if status == "Disabled" { return Theme.faint; }
+        return Theme.warn;
+    }
+}
+
+global Columns {
+    in-out property <length> name: 260px;
+    in-out property <length> status: 130px;
+    in-out property <length> enabled: 78px;
+    in-out property <length> step: 280px;
+    in-out property <length> last-run: 178px;
+    in-out property <length> duration: 84px;
+    in-out property <length> next-run: 158px;
+    in-out property <length> owner: 140px;
+    in-out property <length> category: 170px;
+    in-out property <bool> resizing: false;
+    in-out property <int> active: 0;
+    in-out property <length> origin-x: 0px;
+    in-out property <length> origin-width: 0px;
+
+    public function begin(column: int, pointer-x: length, width: length) {
+        root.active = column;
+        root.origin-x = pointer-x;
+        root.origin-width = width;
+        root.resizing = true;
+    }
+
+    public function apply(pointer-x: length) {
+        if !root.resizing { return; }
+        if root.active == 0 { root.name = max(72px, min(1200px, root.origin-width + pointer-x - root.origin-x)); }
+        else if root.active == 1 { root.status = max(72px, min(1200px, root.origin-width + pointer-x - root.origin-x)); }
+        else if root.active == 2 { root.enabled = max(72px, min(1200px, root.origin-width + pointer-x - root.origin-x)); }
+        else if root.active == 3 { root.step = max(72px, min(1200px, root.origin-width + pointer-x - root.origin-x)); }
+        else if root.active == 4 { root.last-run = max(72px, min(1200px, root.origin-width + pointer-x - root.origin-x)); }
+        else if root.active == 5 { root.duration = max(72px, min(1200px, root.origin-width + pointer-x - root.origin-x)); }
+        else if root.active == 6 { root.next-run = max(72px, min(1200px, root.origin-width + pointer-x - root.origin-x)); }
+        else if root.active == 7 { root.owner = max(72px, min(1200px, root.origin-width + pointer-x - root.origin-x)); }
+        else { root.category = max(72px, min(1200px, root.origin-width + pointer-x - root.origin-x)); }
+    }
+
+    callback resize-finished();
+
+    public function finish() {
+        if !root.resizing { return; }
+        root.resizing = false;
+        root.resize-finished();
+    }
+}
+
+component StatusChip inherits Rectangle {
+    in property <string> label;
+    in property <int> count;
+    in property <bool> selected: false;
+    callback clicked();
+    height: 28px;
+    border-radius: 6px;
+    background: root.selected ? Theme.selected-soft : chip-touch.has-hover ? Theme.hover : transparent;
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 6px;
+        cross-axis-alignment: center;
+
+        Rectangle {
+            width: 8px;
+            height: 8px;
+            border-radius: 4px;
+            background: JobColors.tint(root.label);
+        }
+        Text {
+            text: root.count + " " + root.label;
+            color: JobColors.tint(root.label);
+            font-size: 12px;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+    }
+
+    chip-touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+component ToggleChip inherits Rectangle {
+    in property <string> text;
+    in property <bool> selected: false;
+    callback clicked();
+    height: 28px;
+    min-width: chip-text.preferred-width + 20px;
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: root.selected ? Theme.splitter-active : Theme.border;
+    background: root.selected ? Theme.selected-soft : chip-touch.has-hover ? Theme.hover : transparent;
+
+    chip-text := Text {
+        text: root.text;
+        color: root.selected ? Theme.info : Theme.text-body;
+        font-size: 12px;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    chip-touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+component LegendSwatch inherits HorizontalLayout {
+    in property <string> caption;
+    in property <color> tint;
+    spacing: 4px;
+    alignment: start;
+    cross-axis-alignment: center;
+    Rectangle {
+        width: 10px;
+        height: 8px;
+        border-radius: 2px;
+        background: root.tint;
+    }
+    Text {
+        text: root.caption;
+        color: Theme.muted;
+        font-size: 11px;
+        vertical-alignment: center;
+    }
+}
+
+component Chevron inherits Path {
+    in property <bool> open: false;
+    in property <color> color: Theme.heading;
+    width: 10px;
+    height: 10px;
+    stroke: root.color;
+    stroke-width: 1.6px;
+    commands: root.open ? "M 1 3 L 5 8 L 9 3" : "M 3 1 L 8 5 L 3 9";
+}
+
+component OutcomeText inherits Text {
+    in property <string> outcome;
+    text: root.outcome;
+    color: root.outcome == "Failed" ? Theme.fail :
+           root.outcome == "Succeeded" ? Theme.ok :
+           root.outcome == "In progress" || root.outcome == "Running" ? Theme.info : Theme.warn;
+    font-weight: 700;
+    vertical-alignment: center;
+}
+
+component SortIcon inherits Rectangle {
+    // 0 = not sorted, 1 = ascending, 2 = descending
+    in property <int> state: 0;
+    width: 10px;
+    height: 14px;
+
+    Path {
+        x: 0px;
+        y: 0px;
+        width: 10px;
+        height: 6px;
+        fill: root.state == 1 ? Theme.info : Theme.icon-muted;
+        commands: "M 0 6 L 5 0 L 10 6 Z";
+    }
+    Path {
+        x: 0px;
+        y: 8px;
+        width: 10px;
+        height: 6px;
+        fill: root.state == 2 ? Theme.info : Theme.icon-muted;
+        commands: "M 0 0 L 10 0 L 5 6 Z";
+    }
+}
+
+component FilterIcon inherits Path {
+    in property <bool> active: false;
+    width: 12px;
+    height: 12px;
+    fill: root.active ? Theme.info : transparent;
+    stroke: root.active ? Theme.info : Theme.muted-2;
+    stroke-width: 1.3px;
+    commands: "M 1 1 L 11 1 L 7 6 L 7 11 L 5 10 L 5 6 Z";
+}
+
+component GridCell inherits Rectangle {
+    in property <string> value;
+    in property <color> value-color: Theme.text;
+    in property <bool> strong: false;
+    in property <bool> numeric: false;
+    in property <length> cell-width: 120px;
+    in property <bool> sortable: false;
+    in property <int> sort-state: 0;
+    in property <bool> filterable: false;
+    in property <bool> filter-active: false;
+    in property <int> column-index: 0;
+    in property <bool> resizable: false;
+    callback activated();
+    callback filter-activated(length, length);
+    callback column-resize-started();
+
+    property <length> icon-space: (root.sortable ? 16px : 0px) + (root.filterable ? 20px : 0px);
+
+    min-width: root.cell-width;
+    max-width: root.cell-width;
+    horizontal-stretch: 0;
+
+    Text {
+        x: 10px;
+        width: parent.width - 18px - root.icon-space;
+        height: parent.height;
+        text: root.value;
+        color: root.value-color;
+        font-size: 12px;
+        font-weight: root.strong ? 600 : 400;
+        font-family: root.numeric ? "Consolas" : "Segoe UI";
+        vertical-alignment: center;
+        overflow: elide;
+    }
+
+    Rectangle {
+        x: parent.width - 1px;
+        width: 1px;
+        height: parent.height;
+        background: Theme.line;
+    }
+
+    TouchArea { clicked => { root.activated(); } }
+
+    if root.sortable : SortIcon {
+        x: parent.width - 8px - (root.filterable ? 20px : 0px) - self.width;
+        y: (parent.height - self.height) / 2;
+        state: root.sort-state;
+    }
+
+    if root.filterable : Rectangle {
+        x: parent.width - 26px;
+        y: (parent.height - 20px) / 2;
+        width: 20px;
+        height: 20px;
+        border-radius: 3px;
+        background: filter-touch.has-hover ? Theme.hover : transparent;
+        FilterIcon {
+            x: 4px;
+            y: 4px;
+            active: root.filter-active;
+        }
+        filter-touch := TouchArea {
+            clicked => {
+                root.filter-activated(self.absolute-position.x, self.absolute-position.y + self.height);
+            }
+        }
+    }
+
+    if root.resizable : Rectangle {
+        x: parent.width - 6px;
+        width: 6px;
+        height: parent.height;
+        Rectangle {
+            x: 5px;
+            width: 1px;
+            height: parent.height;
+            background: resize-touch.has-hover || (Columns.resizing && Columns.active == root.column-index) ? Theme.splitter-active : transparent;
+        }
+        resize-touch := TouchArea {
+            mouse-cursor: ew-resize;
+            pointer-event(event) => {
+                if event.button == PointerEventButton.left && event.kind == PointerEventKind.down {
+                    root.column-resize-started();
+                    Columns.begin(root.column-index, self.absolute-position.x + self.mouse-x, root.cell-width);
+                }
+                if event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel {
+                    Columns.finish();
+                }
+            }
+            moved => {
+                if self.pressed {
+                    Columns.apply(self.absolute-position.x + self.mouse-x);
+                }
+            }
+        }
+    }
+}
+
+component JobLine inherits HorizontalLayout {
+    in property <bool> header: false;
+    in property <string> name;
+    in property <string> status;
+    in property <color> status-color: Theme.heading;
+    in property <string> enabled-text;
+    in property <string> step;
+    in property <string> last-run;
+    in property <string> duration;
+    in property <string> next-run;
+    in property <string> owner;
+    in property <string> category;
+    in property <string> sort-column: "";
+    in property <bool> sort-ascending: true;
+    in property <bool> name-filter-active: false;
+    in property <bool> status-filter-active: false;
+    in property <bool> category-filter-active: false;
+
+    spacing: 0px;
+    callback name-activated();
+    callback status-activated();
+    callback last-run-activated();
+    callback name-filter-activated(length, length);
+    callback status-filter-activated(length, length);
+    callback category-filter-activated(length, length);
+    callback column-resize-started();
+
+    function sort-state(column: string) -> int {
+        if root.sort-column != column { return 0; }
+        return root.sort-ascending ? 1 : 2;
+    }
+
+    GridCell {
+        value: root.name;
+        strong: root.header;
+        value-color: root.header ? Theme.heading : Theme.text;
+        cell-width: Columns.name;
+        column-index: 0;
+        resizable: root.header;
+        sortable: root.header;
+        sort-state: root.sort-state("name");
+        filterable: root.header;
+        filter-active: root.name-filter-active;
+        activated => { root.name-activated(); }
+        filter-activated(x, y) => { root.name-filter-activated(x, y); }
+        column-resize-started => { root.column-resize-started(); }
+    }
+    GridCell {
+        value: root.status;
+        strong: true;
+        value-color: root.status-color;
+        cell-width: Columns.status;
+        column-index: 1;
+        resizable: root.header;
+        sortable: root.header;
+        sort-state: root.sort-state("status");
+        filterable: root.header;
+        filter-active: root.status-filter-active;
+        activated => { root.status-activated(); }
+        filter-activated(x, y) => { root.status-filter-activated(x, y); }
+        column-resize-started => { root.column-resize-started(); }
+    }
+    GridCell {
+        value: root.enabled-text;
+        strong: root.header;
+        value-color: root.header ? Theme.heading : Theme.text-body;
+        cell-width: Columns.enabled;
+        column-index: 2;
+        resizable: root.header;
+        column-resize-started => { root.column-resize-started(); }
+    }
+    GridCell {
+        value: root.step;
+        strong: root.header;
+        value-color: root.header ? Theme.heading : Theme.text-body;
+        cell-width: Columns.step;
+        column-index: 3;
+        resizable: root.header;
+        column-resize-started => { root.column-resize-started(); }
+    }
+    GridCell {
+        value: root.last-run;
+        strong: root.header;
+        numeric: !root.header;
+        value-color: root.header ? Theme.heading : Theme.text-body;
+        cell-width: Columns.last-run;
+        column-index: 4;
+        resizable: root.header;
+        sortable: root.header;
+        sort-state: root.sort-state("last-run");
+        activated => { root.last-run-activated(); }
+        column-resize-started => { root.column-resize-started(); }
+    }
+    GridCell {
+        value: root.duration;
+        strong: root.header;
+        numeric: !root.header;
+        value-color: root.header ? Theme.heading : Theme.text-body;
+        cell-width: Columns.duration;
+        column-index: 5;
+        resizable: root.header;
+        column-resize-started => { root.column-resize-started(); }
+    }
+    GridCell {
+        value: root.next-run;
+        strong: root.header;
+        numeric: !root.header;
+        value-color: root.header ? Theme.heading : Theme.text-body;
+        cell-width: Columns.next-run;
+        column-index: 6;
+        resizable: root.header;
+        column-resize-started => { root.column-resize-started(); }
+    }
+    GridCell {
+        value: root.owner;
+        strong: root.header;
+        value-color: root.header ? Theme.heading : Theme.text-body;
+        cell-width: Columns.owner;
+        column-index: 7;
+        resizable: root.header;
+        column-resize-started => { root.column-resize-started(); }
+    }
+    GridCell {
+        value: root.category;
+        strong: root.header;
+        value-color: root.header ? Theme.heading : Theme.text-body;
+        cell-width: Columns.category;
+        column-index: 8;
+        resizable: root.header;
+        filterable: root.header;
+        filter-active: root.category-filter-active;
+        filter-activated(x, y) => { root.category-filter-activated(x, y); }
+        column-resize-started => { root.column-resize-started(); }
+    }
+}
+
+component MenuEntry inherits Rectangle {
+    in property <string> text;
+    in property <bool> available: true;
+    in property <bool> submenu: false;
+    callback activated();
+    callback entered();
+    height: 30px;
+    border-radius: 4px;
+    background: root.available && entry-touch.has-hover ? Theme.hover : transparent;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 8px;
+        spacing: 8px;
+        Text {
+            text: root.text;
+            color: root.available ? Theme.text-body : Theme.faint;
+            font-size: 12px;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+        if root.submenu : Rectangle {
+            width: 14px;
+            height: 30px;
+            Chevron {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                color: root.available ? Theme.heading : Theme.faint;
+            }
+        }
+    }
+
+    entry-touch := TouchArea {
+        enabled: root.available;
+        changed has-hover => {
+            if self.has-hover {
+                root.entered();
+            }
+        }
+        clicked => { root.activated(); }
+    }
+}
+
+component CaptionIcon inherits Rectangle {
+    in property <bool> active: false;
+    in property <string> tip: "";
+    callback clicked();
+    width: 36px;
+    height: 32px;
+    border-radius: 6px;
+    background: icon-touch.has-hover ? Theme.hover : (root.active ? Theme.selected-soft : transparent);
+
+    @children
+
+    icon-touch := TouchArea { clicked => { root.clicked(); } }
+
+    if icon-touch.has-hover && root.tip != "" : Rectangle {
+        y: 36px;
+        x: root.width - self.width;
+        width: tip-label.preferred-width + 16px;
+        height: 24px;
+        border-radius: 4px;
+        background: Theme.menu;
+        border-width: 1px;
+        border-color: Theme.border;
+        tip-label := Text {
+            x: 8px;
+            text: root.tip;
+            color: Theme.text;
+            font-size: 11px;
+            vertical-alignment: center;
+        }
+    }
+}
+
+component WindowMark inherits Path {
+    in property <int> kind: 0;
+    width: 12px;
+    height: 12px;
+    stroke: Theme.text;
+    stroke-width: 1.3px;
+    fill: transparent;
+    commands: root.kind == 0 ? "M 1 6 L 11 6" :
+              root.kind == 1 ? "M 1.5 2.5 L 10.5 2.5 L 10.5 10.5 L 1.5 10.5 Z" :
+              root.kind == 2 ? "M 3.5 1.5 L 10.5 1.5 L 10.5 7.5 L 3.5 7.5 Z M 1.5 4.5 L 7.5 4.5 L 7.5 10.5 L 1.5 10.5 Z" :
+              "M 2 2 L 10 10 M 10 2 L 2 10";
+}
+
+component AppTitleBar inherits Rectangle {
+    in property <bool> pinned: false;
+    in property <bool> maximized: false;
+    callback theme-clicked();
+    callback pin-clicked();
+    callback github-clicked();
+    callback minimize-clicked();
+    callback maximize-clicked();
+    callback close-clicked();
+    height: 40px;
+    background: Theme.titlebar;
+
+    WindowMoveArea {
+        width: parent.width;
+        height: parent.height;
+
+        // Under the caption buttons, so a double-click on the bar maximizes
+        // while clicks on the buttons still go to those buttons.
+        TouchArea {
+            width: parent.width;
+            height: parent.height;
+            double-clicked => { root.maximize-clicked(); }
+        }
+
+        HorizontalLayout {
+            width: parent.width;
+            height: parent.height;
+            padding-left: 12px;
+            spacing: 0px;
+            cross-axis-alignment: center;
+
+            Image {
+                source: @image-url("../assets/app.png");
+                width: 16px;
+                height: 16px;
+            }
+            Text {
+                text: "  SQL Job Monitor";
+                color: Theme.text;
+                font-size: 13px;
+                font-weight: 600;
+                vertical-alignment: center;
+            }
+            Rectangle { horizontal-stretch: 1; }
+
+            CaptionIcon {
+                tip: Theme.mode-label;
+                clicked => { root.theme-clicked(); }
+                if Theme.mode == 2 : Path {
+                    x: 10px;
+                    y: 8px;
+                    width: 16px;
+                    height: 16px;
+                    stroke: Theme.warn;
+                    stroke-width: 1.4px;
+                    fill: transparent;
+                    commands: "M 8 2 L 8 4 M 8 12 L 8 14 M 2 8 L 4 8 M 12 8 L 14 8 M 3.8 3.8 L 5.2 5.2 M 10.8 10.8 L 12.2 12.2 M 12.2 3.8 L 10.8 5.2 M 5.2 10.8 L 3.8 12.2 M 8 5.2 A 2.8 2.8 0 1 0 8 10.8 A 2.8 2.8 0 1 0 8 5.2";
+                }
+                if Theme.mode == 1 : Path {
+                    x: 10px;
+                    y: 8px;
+                    width: 16px;
+                    height: 16px;
+                    fill: Theme.info;
+                    commands: "M 10 3 C 7 4 5.5 6.5 5.5 8.5 C 5.5 11.5 7.5 14 10.5 14.5 C 7 14 4 11.2 4 8 C 4 4.8 7 2.5 10 3 Z";
+                }
+                if Theme.mode == 0 : Path {
+                    x: 10px;
+                    y: 8px;
+                    width: 16px;
+                    height: 16px;
+                    stroke: Theme.text;
+                    stroke-width: 1.3px;
+                    fill: transparent;
+                    commands: "M 2 3.5 L 14 3.5 L 14 11 L 2 11 Z M 6.5 13.5 L 9.5 13.5 M 8 11 L 8 13.5";
+                }
+            }
+            CaptionIcon {
+                active: root.pinned;
+                tip: root.pinned ? "Unpin window" : "Keep window on top";
+                clicked => { root.pin-clicked(); }
+                Path {
+                    x: 10px;
+                    y: 7px;
+                    width: 16px;
+                    height: 16px;
+                    fill: root.pinned ? Theme.info : Theme.text;
+                    commands: "M 6 2 L 10.5 2 L 11.5 6.2 L 14.2 7.4 L 9.2 12.2 L 9.6 15 L 6.6 15 L 7 12.2 L 2 7.4 L 4.7 6.2 Z";
+                }
+            }
+            CaptionIcon {
+                tip: "GitHub";
+                clicked => { root.github-clicked(); }
+                Path {
+                    x: 10px;
+                    y: 8px;
+                    width: 16px;
+                    height: 16px;
+                    fill: Theme.text;
+                    commands: "M 8 1.5 C 4.4 1.5 1.5 4.4 1.5 8 C 1.5 11 3.5 13.5 6.2 14.4 C 6.5 14.5 6.6 14.3 6.6 14.1 C 6.6 13.9 6.6 13.4 6.6 12.8 C 4.9 13.2 4.5 12.1 4.5 12.1 C 4.2 11.3 3.8 11.1 3.8 11.1 C 3.3 10.7 3.9 10.7 3.9 10.7 C 4.5 10.8 4.8 11.4 4.8 11.4 C 5.3 12.3 6.2 12 6.5 11.9 C 6.6 11.5 6.8 11.2 6.9 11.1 C 5.5 10.9 4 10.3 4 7.9 C 4 7.1 4.3 6.5 4.7 6 C 4.6 5.8 4.4 5.1 4.8 4.2 C 4.8 4.2 5.4 4 6.6 4.8 C 7.1 4.7 7.6 4.6 8.1 4.6 C 8.6 4.6 9.1 4.7 9.6 4.8 C 10.8 4 11.4 4.2 11.4 4.2 C 11.8 5.1 11.6 5.8 11.5 6 C 11.9 6.5 12.2 7.1 12.2 7.9 C 12.2 10.3 10.7 10.9 9.3 11.1 C 9.5 11.3 9.7 11.6 9.7 12.1 C 9.7 12.8 9.7 13.9 9.7 14.1 C 9.7 14.3 9.8 14.5 10.1 14.4 C 12.8 13.5 14.5 11 14.5 8 C 14.5 4.4 11.6 1.5 8 1.5 Z";
+                }
+            }
+
+            Rectangle { width: 8px; }
+
+            Rectangle {
+                width: 46px;
+                height: 40px;
+                background: min-touch.has-hover ? Theme.hover : transparent;
+                WindowMark { x: 17px; y: 14px; kind: 0; }
+                min-touch := TouchArea { clicked => { root.minimize-clicked(); } }
+            }
+            Rectangle {
+                width: 46px;
+                height: 40px;
+                background: max-touch.has-hover ? Theme.hover : transparent;
+                WindowMark { x: 17px; y: 14px; kind: root.maximized ? 2 : 1; }
+                max-touch := TouchArea { clicked => { root.maximize-clicked(); } }
+            }
+            Rectangle {
+                width: 46px;
+                height: 40px;
+                background: close-touch.has-hover ? #c42b1c : transparent;
+                WindowMark {
+                    x: 17px;
+                    y: 14px;
+                    kind: 3;
+                    stroke: close-touch.has-hover ? #ffffff : Theme.text;
+                }
+                close-touch := TouchArea { clicked => { root.close-clicked(); } }
+            }
+        }
+    }
+
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        width: parent.width;
+        background: Theme.border;
+    }
+}
+
+export component MainWindow inherits Window {
+    title: "SQL Job Monitor";
+    icon: @image-url("../assets/app.png");
+    no-frame: true;
+    resize-border-width: 6px;
+    always-on-top: root.pinned;
+    preferred-width: 1440px;
+    preferred-height: 860px;
+    in-out property <length> window-min-width: 800px;
+    in-out property <length> window-min-height: 480px;
+    min-width: root.window-min-width;
+    min-height: root.window-min-height;
+    background: Theme.bg;
+
+    in-out property <bool> connected: false;
+    in-out property <bool> busy: false;
+    in-out property <string> server-label: "";
+    in-out property <string> status-message: "Not connected";
+    in-out property <string> error-message: "";
+    in-out property <string> last-refreshed: "Never";
+    in-out property <[JobRow]> jobs;
+    in-out property <[StatusCountRow]> status-counts;
+    // 0 shows the grid; otherwise the timeline covers this many days.
+    in-out property <int> timeline-days: 0;
+    in-out property <int> timeline-range: 1;
+    in-out property <[TimelineLaneRow]> timeline-lanes;
+    in-out property <float> timeline-span: 93600;
+    in-out property <float> timeline-now: 86400;
+    in-out property <int> timeline-start-hour: 0;
+    in-out property <[string]> timeline-day-labels;
+    in-out property <bool> timeline-loading: false;
+    in-out property <length> timeline-pph: 60px;
+    in-out property <bool> timeline-zoom-saved: false;
+    in-out property <string> timeline-hover: "";
+    in-out property <string> timeline-hover-id: "";
+    property <length> timeline-name-width: 0px;
+    property <length> timeline-lane-height: 38px;
+    property <int> timeline-tick-minutes:
+        root.timeline-pph >= 960px ? 5 :
+        root.timeline-pph >= 480px ? 10 :
+        root.timeline-pph >= 320px ? 15 :
+        root.timeline-pph >= 160px ? 30 :
+        root.timeline-pph >= 80px ? 60 :
+        root.timeline-pph >= 40px ? 120 :
+        root.timeline-pph >= 27px ? 180 :
+        root.timeline-pph >= 14px ? 360 :
+        root.timeline-pph >= 7px ? 720 : 1440;
+    property <int> timeline-tick-count: Math.ceil(root.timeline-span / 60 / root.timeline-tick-minutes) + 1;
+    property <length> timeline-content-width: root.timeline-name-width + root.timeline-span / 3600 * root.timeline-pph + 24px;
+
+    pure function timeline-tick-label(tick: int) -> string {
+        let minutes = root.timeline-start-hour * 60 + tick * root.timeline-tick-minutes;
+        let day = Math.floor(minutes / 1440);
+        let of-day = Math.mod(minutes, 1440);
+        let hour = Math.floor(of-day / 60);
+        let minute = Math.mod(of-day, 60);
+        let hour12 = Math.mod(hour, 12) == 0 ? 12 : Math.mod(hour, 12);
+        let clock = hour12 + (minute < 10 ? ":0" : ":") + minute + (hour < 12 ? " AM" : " PM");
+        if of-day == 0 && day < root.timeline-day-labels.length {
+            return root.timeline-day-labels[day];
+        }
+        return clock;
+    }
+    in-out property <[HistoryRunRow]> history;
+    in-out property <string> selected-job-id: "";
+    in-out property <string> selected-job-name: "";
+    in-out property <string> selected-job-status: "";
+    in-out property <string> selected-job-step: "";
+    in-out property <bool> history-loading: false;
+    in-out property <bool> auto-refresh: false;
+    in-out property <int> refresh-seconds: 5;
+    in-out property <bool> confirm-stop-visible: false;
+    in-out property <length> history-pane-width: 365px;
+    in-out property <bool> history-collapsed: false;
+    in-out property <bool> history-dragging: false;
+    in-out property <length> history-drag-origin-x: 0px;
+    in-out property <length> history-drag-origin-width: 365px;
+    in-out property <[CategoryChoice]> categories;
+    in-out property <bool> category-menu-open: false;
+    in-out property <bool> category-filter-active: true;
+    in-out property <length> category-menu-x: 0px;
+    in-out property <length> category-menu-y: 0px;
+    in-out property <string> job-status-filter: "All";
+    property <[string]> status-options: ["All", "Running", "Succeeded", "Failed", "Retry", "Canceled", "Disabled", "Unknown"];
+    in-out property <bool> status-menu-open: false;
+    in-out property <length> status-menu-x: 0px;
+    in-out property <length> status-menu-y: 0px;
+    in-out property <string> sort-column: "name";
+    in-out property <bool> sort-ascending: true;
+    in-out property <bool> job-menu-open: false;
+    in-out property <length> job-menu-x: 0px;
+    in-out property <length> job-menu-y: 0px;
+    in-out property <string> job-menu-id: "";
+    in-out property <bool> job-menu-enabled: false;
+    in-out property <bool> job-menu-running: false;
+    in-out property <bool> steps-menu-open: false;
+    in-out property <[JobStepRow]> job-steps;
+    in-out property <bool> steps-loading: false;
+    // Start needs an enabled idle job. Stop needs a running job.
+    // Enable and disable follow the current enabled flag. Refresh waits until the app is idle.
+    property <bool> menu-can-start: root.job-menu-id != "" && root.job-menu-enabled && !root.job-menu-running && !root.busy;
+    property <bool> menu-can-stop: root.job-menu-running && !root.busy;
+    property <bool> menu-can-enable: root.job-menu-id != "" && !root.job-menu-enabled && !root.busy;
+    property <bool> menu-can-disable: root.job-menu-id != "" && root.job-menu-enabled && !root.busy;
+    property <bool> menu-can-refresh: root.job-menu-id != "" && !root.busy;
+    property <length> job-menu-width: 196px;
+    // The menu's right edge sits on the pointer, and stays inside this window.
+    property <length> job-popup-x: min(max(8px, root.job-menu-x - root.job-menu-width), root.width - root.job-menu-width - 8px);
+    property <length> job-popup-y: min(max(8px, root.job-menu-y), root.height - 188px);
+    in-out property <string> category-label: "ETL";
+    in-out property <[SavedConnectionRow]> saved-connections;
+    in-out property <string> form-server: "";
+    in-out property <string> form-port: "";
+    in-out property <string> form-username: "";
+    in-out property <bool> form-windows-auth: true;
+    in-out property <bool> form-trust-certificate: false;
+    in-out property <bool> pinned: false;
+    in-out property <int> search-focus-tick: 0;
+
+    callback connect-requested(string, string, string, string, bool, bool, bool);
+    callback disconnect-requested();
+    callback refresh-requested();
+    callback filters-changed(string, string);
+    callback sort-requested(string);
+    callback job-selected(string, string, string);
+    callback start-requested(string);
+    callback stop-requested(string);
+    callback steps-requested(string);
+    callback start-at-step-requested(string, string);
+    callback set-enabled-requested(string, bool);
+    callback refresh-job-requested(string);
+    callback refresh-settings-changed(bool, int);
+    callback category-toggled(string, bool);
+    callback categories-set-all(bool);
+    callback saved-login-requested(string);
+    callback saved-delete-requested(string);
+    callback open-github-requested();
+    callback timeline-requested(int);
+    callback persist-requested();
+
+    property <bool> light-widgets: Theme.light;
+    changed light-widgets => {
+        Palette.color-scheme = root.light-widgets ? ColorScheme.light : ColorScheme.dark;
+    }
+    init => {
+        Palette.color-scheme = Theme.light ? ColorScheme.light : ColorScheme.dark;
+    }
+
+    // The pointer position is in window coordinates, captured when the drag
+    // starts, so the pane follows the cursor on the first movement.
+    function resize-history(pointer-x: length) {
+        root.history-pane-width = root.history-drag-origin-width - (pointer-x - root.history-drag-origin-x);
+        if root.history-pane-width < 280px {
+            root.history-pane-width = 280px;
+        }
+        if root.history-pane-width > root.width - 480px {
+            root.history-pane-width = root.width - 480px;
+        }
+    }
+
+    if !root.connected : home := Rectangle {
+        y: 40px;
+        width: parent.width;
+        height: parent.height - 40px;
+        property <length> card-height: min(640px, max(0px, parent.height - 48px));
+        property <length> pair-width: min(876px, max(0px, parent.width - 48px));
+        property <length> saved-card-width: min(340px, max(0px, ((self.pair-width - 16px) * 34) / 86));
+        property <length> login-card-width: max(0px, self.pair-width - 16px - self.saved-card-width);
+
+        VerticalLayout {
+            width: parent.width;
+            height: parent.height;
+            alignment: center;
+
+        HorizontalLayout {
+            alignment: center;
+            spacing: 16px;
+
+        Rectangle {
+            width: home.saved-card-width;
+            height: home.card-height;
+            background: Theme.surface;
+            border-color: Theme.border;
+            border-width: 1px;
+            border-radius: 10px;
+
+            VerticalLayout {
+                padding: 22px;
+                spacing: 10px;
+                Text {
+                    text: "Saved connections";
+                    color: Theme.text;
+                    font-size: 18px;
+                    font-weight: 700;
+                }
+                Text {
+                    text: "Click a connection to sign in.";
+                    color: Theme.muted;
+                    font-size: 12px;
+                }
+                ScrollView {
+                    vertical-stretch: 1;
+                    VerticalLayout {
+                        spacing: 6px;
+                        for saved in root.saved-connections : Rectangle {
+                            height: 62px;
+                            background: saved-touch.has-hover ? Theme.hover : Theme.row-alt;
+                            border-radius: 6px;
+                            VerticalLayout {
+                                padding-left: 12px;
+                                padding-right: 86px;
+                                alignment: center;
+                                Text { text: saved.label; color: Theme.text; font-size: 13px; font-weight: 600; overflow: elide; }
+                                Text { text: saved.detail; color: Theme.muted; font-size: 11px; overflow: elide; }
+                            }
+                            saved-touch := TouchArea { clicked => { root.saved-login-requested(saved.id); } }
+                            Button {
+                                x: parent.width - 78px;
+                                y: 16px;
+                                width: 66px;
+                                text: "Remove";
+                                clicked => { root.saved-delete-requested(saved.id); }
+                            }
+                        }
+                        if root.saved-connections.length == 0 : Text {
+                            text: "Connections you remember will appear here.";
+                            color: Theme.muted-2;
+                            font-size: 12px;
+                            wrap: word-wrap;
+                            horizontal-alignment: center;
+                        }
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            width: home.login-card-width;
+            height: home.card-height;
+            background: Theme.surface;
+            border-color: Theme.border;
+            border-width: 1px;
+            border-radius: 10px;
+
+            VerticalLayout {
+                padding: 32px;
+                spacing: 12px;
+
+                Text {
+                    text: "SQL Job Monitor";
+                    color: Theme.text;
+                    font-size: 28px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                }
+                Text {
+                    text: "Connect to SQL Server Agent";
+                    color: Theme.muted;
+                    font-size: 14px;
+                    horizontal-alignment: center;
+                }
+
+                VerticalLayout {
+                    spacing: 4px;
+                    Text { text: "Server or named instance"; color: Theme.label; font-size: 12px; }
+                    server-input := LineEdit {
+                        placeholder-text: "SERVER or SERVER\\INSTANCE";
+                        text <=> root.form-server;
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 12px;
+                    VerticalLayout {
+                        spacing: 4px;
+                        Text { text: "Port (optional)"; color: Theme.label; font-size: 12px; }
+                        port-input := LineEdit {
+                            placeholder-text: "1433";
+                            text <=> root.form-port;
+                        }
+                    }
+                    VerticalLayout {
+                        spacing: 4px;
+                        Text { text: "Database"; color: Theme.label; font-size: 12px; }
+                        database-input := LineEdit { text: "msdb"; enabled: false; }
+                    }
+                }
+
+                windows-auth := CheckBox {
+                    text: "Use my current Windows account";
+                    checked: root.form-windows-auth;
+                    toggled => { root.form-windows-auth = self.checked; }
+                }
+
+                credentials := VerticalLayout {
+                    opacity: windows-auth.checked ? 0.45 : 1;
+                    spacing: 4px;
+                    Text { text: "SQL login"; color: Theme.label; font-size: 12px; }
+                    username-input := LineEdit {
+                        placeholder-text: "Username";
+                        enabled: !windows-auth.checked;
+                        text <=> root.form-username;
+                    }
+                    password-input := LineEdit {
+                        placeholder-text: "Password";
+                        input-type: password;
+                        enabled: !windows-auth.checked;
+                    }
+                }
+
+                trust-cert := CheckBox {
+                    text: "Trust server certificate (reduces TLS security)";
+                    checked: root.form-trust-certificate;
+                    toggled => { root.form-trust-certificate = self.checked; }
+                }
+                remember-connection := CheckBox {
+                    text: "Remember this connection";
+                    checked: true;
+                }
+
+                if root.error-message != "" : Rectangle {
+                    background: Theme.error-bg;
+                    border-radius: 4px;
+                    height: error-text.preferred-height + 18px;
+                    error-text := Text {
+                        x: 9px;
+                        y: 9px;
+                        width: parent.width - 18px;
+                        text: root.error-message;
+                        color: Theme.error-text;
+                        font-size: 12px;
+                        wrap: word-wrap;
+                    }
+                }
+
+                Rectangle { vertical-stretch: 1; }
+
+                Button {
+                    text: root.busy ? "Connecting…" : "Connect";
+                    enabled: !root.busy && server-input.text != "";
+                    clicked => {
+                        root.connect-requested(
+                            server-input.text,
+                            port-input.text,
+                            username-input.text,
+                            password-input.text,
+                            windows-auth.checked,
+                            trust-cert.checked,
+                            remember-connection.checked
+                        );
+                        password-input.text = "";
+                    }
+                }
+            }
+        }
+        }
+        }
+    }
+
+    if root.connected : Rectangle {
+        y: 40px;
+        width: parent.width;
+        height: parent.height - 40px;
+        VerticalLayout {
+            width: parent.width;
+            height: parent.height;
+        spacing: 0px;
+
+        Rectangle {
+            height: 44px;
+            background: Theme.surface;
+            border-color: Theme.border;
+            border-width: 1px;
+
+            HorizontalLayout {
+                padding-left: 12px;
+                padding-right: 10px;
+                spacing: 8px;
+                alignment: start;
+                cross-axis-alignment: center;
+                Text { text: root.server-label; color: Theme.text-body; font-size: 12px; vertical-alignment: center; }
+                Text { text: root.status-message; color: Theme.ok; font-size: 11px; vertical-alignment: center; }
+                Rectangle {
+                    min-width: 0px;
+                    horizontal-stretch: 1;
+                    clip: true;
+                    HorizontalLayout {
+                        spacing: 6px;
+                        alignment: start;
+                        cross-axis-alignment: center;
+                        Rectangle {
+                            height: 28px;
+                            border-radius: 6px;
+                            background: root.job-status-filter == "All" ? Theme.selected-soft : all-jobs-touch.has-hover ? Theme.hover : transparent;
+                            HorizontalLayout {
+                                padding-left: 8px;
+                                padding-right: 8px;
+                                Text {
+                                    text: "Show all jobs";
+                                    color: Theme.text;
+                                    font-size: 12px;
+                                    font-weight: 600;
+                                    vertical-alignment: center;
+                                }
+                            }
+                            all-jobs-touch := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    root.job-status-filter = "All";
+                                    root.filters-changed(search-input.text, "All");
+                                }
+                            }
+                        }
+                        for item in root.status-counts : StatusChip {
+                            label: item.label;
+                            count: item.count;
+                            selected: root.job-status-filter == item.label;
+                            clicked => {
+                                root.job-status-filter = item.label;
+                                root.filters-changed(search-input.text, item.label);
+                            }
+                        }
+                    }
+                }
+                search-input := LineEdit {
+                    width: 200px;
+                    placeholder-text: "Search jobs";
+                    edited => { root.filters-changed(self.text, root.job-status-filter); }
+                }
+                focus-watch := Rectangle {
+                    width: 0px;
+                    height: 0px;
+                    property <int> tick: root.search-focus-tick;
+                    changed tick => { search-input.focus(); }
+                }
+                ToggleChip {
+                    text: "Grid";
+                    selected: root.timeline-days == 0;
+                    clicked => {
+                        root.timeline-days = 0;
+                        root.timeline-hover = "";
+                        root.timeline-hover-id = "";
+                        root.timeline-requested(0);
+                    }
+                }
+                ToggleChip {
+                    text: "Timeline";
+                    selected: root.timeline-days > 0;
+                    clicked => {
+                        if root.timeline-days == 0 {
+                            root.timeline-days = root.timeline-range;
+                            root.timeline-requested(root.timeline-days);
+                        }
+                    }
+                }
+                Text {
+                    text: "Updated " + root.last-refreshed;
+                    color: Theme.muted;
+                    font-size: 11px;
+                    vertical-alignment: center;
+                }
+                CheckBox {
+                    text: "Auto refresh";
+                    checked: root.auto-refresh;
+                    toggled => {
+                        root.auto-refresh = self.checked;
+                        root.refresh-settings-changed(root.auto-refresh, root.refresh-seconds);
+                    }
+                }
+                Text { text: "Every"; color: Theme.muted; vertical-alignment: center; font-size: 12px; }
+                SpinBox {
+                    width: 72px;
+                    value: root.refresh-seconds;
+                    minimum: 2;
+                    maximum: 300;
+                    edited(value) => {
+                        root.refresh-seconds = value;
+                        root.refresh-settings-changed(root.auto-refresh, value);
+                    }
+                }
+                Text { text: "s"; color: Theme.muted; vertical-alignment: center; font-size: 12px; }
+                Button { text: "Refresh"; enabled: !root.busy; clicked => { root.refresh-requested(); } }
+                Button { text: "Disconnect"; clicked => { root.disconnect-requested(); } }
+            }
+        }
+
+        if root.error-message != "" : Rectangle {
+            background: Theme.error-bg;
+            height: banner-text.preferred-height + 16px;
+            banner-text := Text {
+                x: 12px;
+                y: 8px;
+                width: parent.width - 24px;
+                text: root.error-message;
+                color: Theme.error-text;
+                font-size: 12px;
+                wrap: word-wrap;
+            }
+        }
+
+        HorizontalLayout {
+            spacing: 0px;
+            padding-left: 12px;
+            padding-right: 12px;
+            padding-bottom: 12px;
+
+            Rectangle {
+                background: Theme.grid;
+                border-color: Theme.border;
+                border-width: 1px;
+                border-radius: 6px;
+                horizontal-stretch: 3;
+                clip: true;
+
+                if root.timeline-days == 0 : Rectangle {
+                    width: parent.width;
+                    height: parent.height;
+                    column-header := Rectangle {
+                        y: 0px;
+                        height: 36px;
+                        width: parent.width;
+                        clip: true;
+                        background: Theme.menu;
+                        JobLine {
+                            x: jobs-scroll.content-x;
+                            width: max(jobs-scroll.content-width, jobs-scroll.visible-width);
+                            height: parent.height;
+                            header: true;
+                            name: "Job name";
+                            status: "Status";
+                            status-color: Theme.heading;
+                            enabled-text: "Enabled";
+                            step: "Current / last step";
+                            last-run: "Last run";
+                            duration: "Duration";
+                            next-run: "Next run";
+                            owner: "Owner";
+                            category: "Category";
+                            sort-column: root.sort-column;
+                            sort-ascending: root.sort-ascending;
+                            name-filter-active: search-input.text != "";
+                            status-filter-active: root.job-status-filter != "All";
+                            category-filter-active: root.category-filter-active;
+                            name-activated => { root.sort-requested("name"); }
+                            status-activated => { root.sort-requested("status"); }
+                            last-run-activated => { root.sort-requested("last-run"); }
+                            name-filter-activated(x, y) => { search-input.focus(); }
+                            status-filter-activated(x, y) => {
+                                root.category-menu-open = false;
+                                root.job-menu-open = false;
+                                root.steps-menu-open = false;
+                                root.status-menu-x = x;
+                                root.status-menu-y = y + 4px;
+                                root.status-menu-open = !root.status-menu-open;
+                            }
+                            category-filter-activated(x, y) => {
+                                root.status-menu-open = false;
+                                root.job-menu-open = false;
+                                root.steps-menu-open = false;
+                                root.category-menu-x = min(x, root.width - 292px);
+                                root.category-menu-y = y + 4px;
+                                root.category-menu-open = !root.category-menu-open;
+                            }
+                            column-resize-started => {
+                                root.status-menu-open = false;
+                                root.category-menu-open = false;
+                                root.job-menu-open = false;
+                                root.steps-menu-open = false;
+                            }
+                        }
+                    }
+
+                    jobs-scroll := ScrollView {
+                        y: column-header.height;
+                        width: parent.width;
+                        height: parent.height - self.y;
+                        VerticalLayout {
+                            spacing: 0px;
+                            for job[index] in root.jobs : Rectangle {
+                                height: 34px;
+                                background: root.selected-job-id == job.id ? Theme.selected : mod(index, 2) == 0 ? Theme.surface : Theme.row-alt;
+                                JobLine {
+                                    width: parent.width;
+                                    height: parent.height;
+                                    name: job.name;
+                                    status: job.status;
+                                    status-color: JobColors.tint(job.status);
+                                    enabled-text: job.enabled ? "Yes" : "No";
+                                    step: job.current-step;
+                                    last-run: job.last-run;
+                                    duration: job.duration;
+                                    next-run: job.next-run;
+                                    owner: job.owner;
+                                    category: job.category;
+                                }
+                                Rectangle { y: parent.height - 1px; height: 1px; background: Theme.line; }
+                                TouchArea {
+                                    clicked => {
+                                        root.job-menu-open = false;
+                                        root.steps-menu-open = false;
+                                        root.selected-job-id = job.id;
+                                        root.selected-job-name = job.name;
+                                        root.selected-job-status = job.status;
+                                        root.selected-job-step = job.current-step;
+                                        root.job-selected(job.id, job.name, job.status);
+                                    }
+                                    pointer-event(event) => {
+                                        if event.button == PointerEventButton.right && event.kind == PointerEventKind.down {
+                                            root.status-menu-open = false;
+                                            root.category-menu-open = false;
+                                            root.steps-menu-open = false;
+                                            root.job-menu-id = job.id;
+                                            root.job-menu-enabled = job.enabled;
+                                            root.job-menu-running = job.running;
+                                            root.job-menu-x = self.absolute-position.x + self.mouse-x;
+                                            root.job-menu-y = self.absolute-position.y + self.mouse-y;
+                                            root.selected-job-id = job.id;
+                                            root.selected-job-name = job.name;
+                                            root.selected-job-status = job.status;
+                                            root.selected-job-step = job.current-step;
+                                            root.job-selected(job.id, job.name, job.status);
+                                            root.steps-requested(job.id);
+                                            root.job-menu-open = true;
+                                        }
+                                    }
+                                }
+                            }
+                            if root.jobs.length == 0 : Text {
+                                text: root.busy ? "Loading jobs…" : "No jobs match the current filters.";
+                                color: Theme.muted-2;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                                height: 80px;
+                            }
+                        }
+                    }
+                }
+
+                if root.timeline-days > 0 : timeline := Rectangle {
+                    width: parent.width;
+                    height: parent.height;
+                    property <length> body-width: self.width - root.timeline-name-width;
+
+                    function fit(days: int) {
+                        root.timeline-pph = max(4px, self.body-width - 24px) / (days * 24 + 2);
+                        timeline-scroll.content-x = 0px;
+                        root.timeline-zoom-saved = true;
+                        root.persist-requested();
+                    }
+
+                    function zoom(factor: float, anchor: length) {
+                        let hours = (anchor - timeline-scroll.content-x - root.timeline-name-width) / root.timeline-pph;
+                        root.timeline-pph = max(4px, min(6000px, root.timeline-pph * factor));
+                        let width = root.timeline-name-width + root.timeline-span / 3600 * root.timeline-pph + 24px;
+                        let target = anchor - root.timeline-name-width - hours * root.timeline-pph;
+                        timeline-scroll.content-x = max(min(0px, timeline-scroll.visible-width - width), min(0px, target));
+                        root.timeline-zoom-saved = true;
+                        root.persist-requested();
+                    }
+
+                    init => {
+                        if !root.timeline-zoom-saved {
+                            self.fit(root.timeline-days);
+                        }
+                    }
+
+                    timeline-toolbar := Rectangle {
+                        y: 0px;
+                        height: 40px;
+                        width: parent.width;
+                        background: Theme.menu;
+                        HorizontalLayout {
+                            padding-left: 10px;
+                            padding-right: 10px;
+                            spacing: 6px;
+                            alignment: start;
+                            cross-axis-alignment: center;
+                            Text { text: "Range"; color: Theme.muted; font-size: 12px; vertical-alignment: center; }
+                            ToggleChip {
+                                text: "24 hours";
+                                selected: root.timeline-days == 1;
+                                clicked => { root.timeline-range = 1; root.timeline-days = 1; timeline.fit(1); root.timeline-requested(1); }
+                            }
+                            ToggleChip {
+                                text: "3 days";
+                                selected: root.timeline-days == 3;
+                                clicked => { root.timeline-range = 3; root.timeline-days = 3; timeline.fit(3); root.timeline-requested(3); }
+                            }
+                            ToggleChip {
+                                text: "7 days";
+                                selected: root.timeline-days == 7;
+                                clicked => { root.timeline-range = 7; root.timeline-days = 7; timeline.fit(7); root.timeline-requested(7); }
+                            }
+                            Rectangle { width: 10px; }
+                            Text { text: "Zoom"; color: Theme.muted; font-size: 12px; vertical-alignment: center; }
+                            ToggleChip {
+                                text: "−";
+                                width: 32px;
+                                clicked => { timeline.zoom(0.66, timeline-scroll.visible-width / 2); }
+                            }
+                            ToggleChip {
+                                text: "+";
+                                width: 32px;
+                                clicked => { timeline.zoom(1.5, timeline-scroll.visible-width / 2); }
+                            }
+                            ToggleChip {
+                                text: "Fit";
+                                clicked => { timeline.fit(root.timeline-days); }
+                            }
+                            Rectangle { width: 12px; }
+                            LegendSwatch { caption: "Running"; tint: Theme.info; }
+                            LegendSwatch { caption: "Succeeded"; tint: Theme.ok; }
+                            LegendSwatch { caption: "Failed"; tint: Theme.fail; }
+                            Text {
+                                text: "pale bar is the whole run";
+                                color: Theme.muted-2;
+                                font-size: 11px;
+                                vertical-alignment: center;
+                            }
+                            Rectangle { width: 10px; }
+                            Text {
+                                text: root.timeline-loading ? "Loading history…" :
+                                      root.timeline-hover != "" ? root.timeline-hover : "Ctrl + mouse wheel zooms. Hover a bar for details.";
+                                color: root.timeline-hover != "" ? Theme.text : Theme.muted-2;
+                                font-size: 12px;
+                                vertical-alignment: center;
+                                horizontal-stretch: 1;
+                                overflow: elide;
+                            }
+                        }
+                        Rectangle { y: parent.height - 1px; height: 1px; background: Theme.line; }
+                    }
+
+                    timeline-axis := Rectangle {
+                        y: timeline-toolbar.height;
+                        height: 28px;
+                        width: parent.width;
+                        clip: true;
+                        background: Theme.menu;
+                        for tick in root.timeline-tick-count : Rectangle {
+                            x: root.timeline-name-width + tick * root.timeline-tick-minutes / 60 * root.timeline-pph + timeline-scroll.content-x;
+                            width: 1px;
+                            height: parent.height;
+                            background: Theme.line;
+                            Text {
+                                x: 4px;
+                                text: root.timeline-tick-label(tick);
+                                color: Math.mod(root.timeline-start-hour * 60 + tick * root.timeline-tick-minutes, 1440) == 0 ? Theme.text : Theme.heading;
+                                font-size: 11px;
+                                font-weight: Math.mod(root.timeline-start-hour * 60 + tick * root.timeline-tick-minutes, 1440) == 0 ? 700 : 400;
+                                vertical-alignment: center;
+                                height: parent.height;
+                            }
+                        }
+                        Rectangle { y: parent.height - 1px; height: 1px; background: Theme.border; }
+                    }
+
+                    timeline-scroll := ScrollView {
+                        y: timeline-axis.y + timeline-axis.height;
+                        width: parent.width;
+                        height: parent.height - self.y;
+                        content-width: max(root.timeline-content-width, self.visible-width);
+                        content-height: max(root.timeline-lanes.length * root.timeline-lane-height, self.visible-height);
+
+                        Rectangle {
+                            width: max(root.timeline-content-width, timeline-scroll.visible-width);
+                            height: max(root.timeline-lanes.length * root.timeline-lane-height, timeline-scroll.visible-height);
+
+                            TouchArea {
+                                scroll-event(event) => {
+                                    if event.modifiers.control {
+                                        timeline.zoom(event.delta-y > 0 ? 1.25 : 0.8, self.mouse-x + timeline-scroll.content-x);
+                                        return accept;
+                                    }
+                                    return reject;
+                                }
+                            }
+
+                            for tick in root.timeline-tick-count : Rectangle {
+                                x: root.timeline-name-width + tick * root.timeline-tick-minutes / 60 * root.timeline-pph;
+                                width: 1px;
+                                height: parent.height;
+                                background: Theme.line;
+                            }
+
+                            for lane[index] in root.timeline-lanes : Rectangle {
+                                y: index * root.timeline-lane-height;
+                                width: parent.width;
+                                height: root.timeline-lane-height;
+                                background: root.selected-job-id == lane.id ? Theme.selected-soft : transparent;
+
+                                Rectangle { y: parent.height - 1px; height: 1px; background: Theme.line; }
+
+                                TouchArea {
+                                    width: parent.width;
+                                    height: parent.height;
+                                    pointer-event(event) => { return EventResult.reject; }
+                                    changed has-hover => {
+                                        if self.has-hover {
+                                            root.timeline-hover-id = lane.id;
+                                            root.timeline-hover = lane.name;
+                                        } else if root.timeline-hover-id == lane.id {
+                                            root.timeline-hover-id = "";
+                                            root.timeline-hover = "";
+                                        }
+                                    }
+                                    clicked => {
+                                        root.selected-job-id = lane.id;
+                                        root.selected-job-name = lane.name;
+                                        root.selected-job-status = lane.status;
+                                        root.selected-job-step = lane.current-step;
+                                        root.job-selected(lane.id, lane.name, lane.status);
+                                    }
+                                }
+
+                                for bar in lane.bars : Rectangle {
+                                    x: root.timeline-name-width + bar.start / 3600 * root.timeline-pph;
+                                    y: bar.is-step ? 20px : 6px;
+                                    width: max(2px, bar.length / 3600 * root.timeline-pph);
+                                    height: bar.is-step ? 12px : 10px;
+                                    border-radius: 3px;
+                                    background: bar.is-step ? JobColors.tint(bar.status) : JobColors.tint(bar.status).with-alpha(0.45);
+                                    border-width: bar-touch.has-hover ? 1px : 0px;
+                                    border-color: Theme.text;
+                                    bar-touch := TouchArea {
+                                        mouse-cursor: pointer;
+                                        changed has-hover => {
+                                            if self.has-hover {
+                                                root.timeline-hover-id = lane.id;
+                                                root.timeline-hover = lane.name + "  ·  " + bar.detail;
+                                            } else if root.timeline-hover-id == lane.id {
+                                                root.timeline-hover-id = "";
+                                                root.timeline-hover = "";
+                                            }
+                                        }
+                                        clicked => {
+                                            root.selected-job-id = lane.id;
+                                            root.selected-job-name = lane.name;
+                                            root.selected-job-status = lane.status;
+                                            root.selected-job-step = lane.current-step;
+                                            root.job-selected(lane.id, lane.name, lane.status);
+                                        }
+                                    }
+                                }
+
+                                if root.timeline-hover-id == lane.id : Rectangle {
+                                    x: 8px - timeline-scroll.content-x;
+                                    y: 4px;
+                                    width: hover-name.preferred-width + 16px;
+                                    height: parent.height - 8px;
+                                    background: Theme.menu;
+                                    border-width: 1px;
+                                    border-color: Theme.border;
+                                    border-radius: 4px;
+                                    hover-name := Text {
+                                        x: 8px;
+                                        text: lane.name;
+                                        color: Theme.text;
+                                        font-size: 12px;
+                                        font-weight: 600;
+                                        vertical-alignment: center;
+                                        height: parent.height;
+                                    }
+                                }
+                            }
+
+                            if root.timeline-now > 0 && root.timeline-now < root.timeline-span : Rectangle {
+                                x: root.timeline-name-width + root.timeline-now / 3600 * root.timeline-pph;
+                                width: 2px;
+                                height: parent.height;
+                                background: Theme.fail;
+                                opacity: 0.8;
+                            }
+                            if root.timeline-now > 0 && root.timeline-now < root.timeline-span : Rectangle {
+                                x: root.timeline-name-width + root.timeline-now / 3600 * root.timeline-pph + 6px;
+                                y: 4px;
+                                width: now-label.preferred-width + 8px;
+                                height: 14px;
+                                background: Theme.menu;
+                                border-radius: 3px;
+                                now-label := Text {
+                                    x: 4px;
+                                    text: "Now";
+                                    color: Theme.fail;
+                                    font-size: 10px;
+                                    font-weight: 700;
+                                    vertical-alignment: center;
+                                    height: parent.height;
+                                }
+                            }
+
+                            if root.timeline-lanes.length == 0 : Text {
+                                x: root.timeline-name-width - timeline-scroll.content-x;
+                                y: 24px;
+                                width: timeline-scroll.visible-width - root.timeline-name-width;
+                                text: root.timeline-loading ? "Loading history…" : "No jobs match the current filters.";
+                                color: Theme.muted-2;
+                                horizontal-alignment: center;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if !root.history-collapsed : Rectangle {
+                width: 16px;
+                background: history-resize.has-hover || root.history-dragging ? Theme.selected-soft : transparent;
+                Rectangle {
+                    x: 7px;
+                    y: 8px;
+                    width: 2px;
+                    height: parent.height - 16px;
+                    background: history-resize.has-hover || root.history-dragging ? Theme.splitter-active : Theme.splitter;
+                    border-radius: 1px;
+                }
+                history-resize := TouchArea {
+                    mouse-cursor: ew-resize;
+                    pointer-event(event) => {
+                        if event.button == PointerEventButton.left && event.kind == PointerEventKind.down {
+                            root.history-drag-origin-x = self.absolute-position.x + self.mouse-x;
+                            root.history-drag-origin-width = root.history-pane-width;
+                            root.history-dragging = true;
+                        }
+                        if event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel {
+                            root.history-dragging = false;
+                            root.persist-requested();
+                        }
+                    }
+                    moved => {
+                        if self.pressed && root.history-dragging {
+                            root.resize-history(self.absolute-position.x + self.mouse-x);
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                width: root.history-collapsed ? 36px : root.history-pane-width;
+                background: Theme.surface;
+                border-color: Theme.border;
+                border-width: 1px;
+                border-radius: 6px;
+                clip: true;
+
+                if root.history-collapsed : Rectangle {
+                    width: parent.width;
+                    height: parent.height;
+                    expand-history := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => { root.history-collapsed = false; root.persist-requested(); }
+                    }
+                    Path {
+                        x: (parent.width - self.width) / 2;
+                        y: 18px;
+                        width: 10px;
+                        height: 10px;
+                        stroke: expand-history.has-hover ? Theme.text : Theme.heading;
+                        stroke-width: 1.6px;
+                        commands: "M 8 1 L 3 5 L 8 9";
+                    }
+                }
+
+                if !root.history-collapsed : VerticalLayout {
+                    padding: 14px;
+                    spacing: 10px;
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Text {
+                            text: root.selected-job-name == "" ? "Select a job" : root.selected-job-name;
+                            color: Theme.text-strong;
+                            font-size: 17px;
+                            font-weight: 700;
+                            overflow: elide;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                        }
+                        Rectangle {
+                            width: 28px;
+                            height: 28px;
+                            border-radius: 6px;
+                            background: collapse-history.has-hover ? Theme.hover : transparent;
+                            Path {
+                                x: 9px;
+                                y: 9px;
+                                width: 10px;
+                                height: 10px;
+                                stroke: Theme.heading;
+                                stroke-width: 1.6px;
+                                commands: "M 2 1 L 7 5 L 2 9";
+                            }
+                            collapse-history := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => { root.history-collapsed = true; root.persist-requested(); }
+                            }
+                        }
+                    }
+                    Text {
+                        text: root.selected-job-status;
+                        color: root.selected-job-status == "Running" ? Theme.info : Theme.info-soft;
+                        font-size: 12px;
+                    }
+                    if root.selected-job-status == "Running" && root.selected-job-step != "" : Text {
+                        text: root.selected-job-step;
+                        color: Theme.info-soft;
+                        font-size: 12px;
+                        overflow: elide;
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Button {
+                            text: "Start";
+                            enabled: root.selected-job-id != "" && root.selected-job-status != "Running" && !root.busy;
+                            clicked => { root.start-requested(root.selected-job-id); }
+                        }
+                        Button {
+                            text: "Stop";
+                            enabled: root.selected-job-status == "Running" && !root.busy;
+                            clicked => { root.confirm-stop-visible = true; }
+                        }
+                    }
+                    Rectangle { height: 1px; background: Theme.border; }
+                    Text { text: "Recent history"; color: Theme.text-body; font-size: 13px; font-weight: 600; }
+                    ScrollView {
+                        vertical-stretch: 1;
+                        VerticalLayout {
+                            spacing: 6px;
+                            for run in root.history : Rectangle {
+                                background: Theme.panel;
+                                border-radius: 4px;
+                                VerticalLayout {
+                                    spacing: 0px;
+                                    Rectangle {
+                                        height: 34px;
+                                        background: run-touch.has-hover ? Theme.hover-strong : transparent;
+                                        border-radius: 4px;
+                                        HorizontalLayout {
+                                            padding-left: 8px;
+                                            padding-right: 8px;
+                                            spacing: 8px;
+                                            Rectangle {
+                                                width: 14px;
+                                                Chevron {
+                                                    x: 2px;
+                                                    y: (parent.height - self.height) / 2;
+                                                    open: run.expanded;
+                                                }
+                                            }
+                                            Text {
+                                                text: run.run-at;
+                                                color: Theme.text-body;
+                                                font-size: 11px;
+                                                font-family: "Consolas";
+                                                vertical-alignment: center;
+                                                horizontal-stretch: 1;
+                                                overflow: elide;
+                                            }
+                                            Text {
+                                                text: run.duration;
+                                                color: Theme.muted;
+                                                font-size: 11px;
+                                                font-family: "Consolas";
+                                                vertical-alignment: center;
+                                            }
+                                            OutcomeText {
+                                                outcome: run.outcome;
+                                                font-size: 11px;
+                                                width: 72px;
+                                                horizontal-alignment: right;
+                                            }
+                                        }
+                                        run-touch := TouchArea {
+                                            clicked => { run.expanded = !run.expanded; }
+                                        }
+                                    }
+                                    if run.expanded : VerticalLayout {
+                                        padding-left: 12px;
+                                        padding-right: 8px;
+                                        padding-bottom: 8px;
+                                        spacing: 4px;
+                                        if run.message != "" : VerticalLayout {
+                                            spacing: 2px;
+                                            Rectangle {
+                                                height: 22px;
+                                                HorizontalLayout {
+                                                    spacing: 6px;
+                                                    Rectangle {
+                                                        width: 14px;
+                                                        Chevron {
+                                                            x: 2px;
+                                                            y: (parent.height - self.height) / 2;
+                                                            open: run.description-open;
+                                                        }
+                                                    }
+                                                    Text {
+                                                        text: "Description";
+                                                        color: Theme.muted;
+                                                        font-size: 11px;
+                                                        vertical-alignment: center;
+                                                    }
+                                                }
+                                                TouchArea { clicked => { run.description-open = !run.description-open; } }
+                                            }
+                                            if run.description-open : Text {
+                                                text: run.message;
+                                                color: Theme.muted-2;
+                                                font-size: 10px;
+                                                wrap: word-wrap;
+                                            }
+                                        }
+                                        for step in run.steps : VerticalLayout {
+                                            spacing: 1px;
+                                            HorizontalLayout {
+                                                spacing: 6px;
+                                                if step.message != "" : Rectangle {
+                                                    width: 14px;
+                                                    Chevron {
+                                                        x: 2px;
+                                                        y: (parent.height - self.height) / 2;
+                                                        open: step.details-open;
+                                                    }
+                                                    TouchArea { clicked => { step.details-open = !step.details-open; } }
+                                                }
+                                                Text {
+                                                    text: step.step;
+                                                    color: Theme.text-body;
+                                                    font-size: 11px;
+                                                    horizontal-stretch: 1;
+                                                    overflow: elide;
+                                                    vertical-alignment: center;
+                                                }
+                                                Text {
+                                                    text: step.duration;
+                                                    color: Theme.muted;
+                                                    font-size: 11px;
+                                                    font-family: "Consolas";
+                                                    vertical-alignment: center;
+                                                }
+                                                OutcomeText {
+                                                    outcome: step.outcome;
+                                                    font-size: 10px;
+                                                    width: 64px;
+                                                    horizontal-alignment: right;
+                                                }
+                                            }
+                                            if step.details-open && step.message != "" : Text {
+                                                text: step.message;
+                                                color: Theme.muted-2;
+                                                font-size: 10px;
+                                                wrap: word-wrap;
+                                            }
+                                        }
+                                        if run.steps.length == 0 && run.message == "" : Text {
+                                            text: "No step details recorded.";
+                                            color: Theme.muted-2;
+                                            font-size: 10px;
+                                            wrap: word-wrap;
+                                        }
+                                    }
+                                }
+                            }
+                            if root.history-loading : Text { text: "Loading history…"; color: Theme.muted-2; horizontal-alignment: center; }
+                            if !root.history-loading && root.selected-job-id != "" && root.history.length == 0 : Text {
+                                text: "No history is available.";
+                                color: Theme.muted-2;
+                                horizontal-alignment: center;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        }
+
+        if Columns.resizing : TouchArea {
+            width: parent.width;
+            height: parent.height;
+            mouse-cursor: ew-resize;
+            moved => { Columns.apply(self.absolute-position.x + self.mouse-x); }
+            pointer-event(event) => {
+                if event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel {
+                    Columns.finish();
+                }
+            }
+        }
+
+        if root.status-menu-open : Rectangle {
+            TouchArea { clicked => { root.status-menu-open = false; } }
+
+            Rectangle {
+                x: root.status-menu-x;
+                y: root.status-menu-y;
+                width: 170px;
+                height: 8 * 28px + 12px;
+                background: Theme.menu;
+                border-color: Theme.border-strong;
+                border-width: 1px;
+                border-radius: 6px;
+
+                VerticalLayout {
+                    padding: 6px;
+                    spacing: 0px;
+                    for option in root.status-options : Rectangle {
+                        height: 28px;
+                        border-radius: 4px;
+                        background: option-touch.has-hover ? Theme.hover :
+                                    root.job-status-filter == option ? Theme.selected-soft : transparent;
+                        Text {
+                            x: 10px;
+                            text: option;
+                            color: root.job-status-filter == option ? Theme.info : Theme.text-body;
+                            font-size: 12px;
+                            vertical-alignment: center;
+                            height: parent.height;
+                        }
+                        option-touch := TouchArea {
+                            clicked => {
+                                root.job-status-filter = option;
+                                root.filters-changed(search-input.text, option);
+                                root.status-menu-open = false;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if root.category-menu-open : Rectangle {
+        TouchArea { clicked => { root.category-menu-open = false; } }
+
+        Rectangle {
+            x: root.category-menu-x;
+            y: root.category-menu-y;
+            width: 280px;
+            height: min(340px, 52px + root.categories.length * 28px);
+            background: Theme.menu;
+            border-color: Theme.border-strong;
+            border-width: 1px;
+            border-radius: 6px;
+
+            VerticalLayout {
+                padding: 8px;
+                spacing: 6px;
+                HorizontalLayout {
+                    spacing: 8px;
+                    Button { text: "All"; clicked => { root.categories-set-all(true); } }
+                    Button { text: "None"; clicked => { root.categories-set-all(false); } }
+                }
+                ScrollView {
+                    vertical-stretch: 1;
+                    VerticalLayout {
+                        spacing: 2px;
+                        for category in root.categories : CheckBox {
+                            text: category.name;
+                            checked: category.checked;
+                            toggled => { root.category-toggled(category.name, self.checked); }
+                        }
+                    }
+                }
+            }
+        }
+        }
+
+        if root.job-menu-open : Rectangle {
+            TouchArea {
+                clicked => {
+                    root.job-menu-open = false;
+                    root.steps-menu-open = false;
+                }
+            }
+
+            Rectangle {
+                x: root.job-popup-x;
+                y: root.job-popup-y;
+                width: root.job-menu-width;
+                height: 180px;
+                background: Theme.menu;
+                border-color: Theme.border-strong;
+                border-width: 1px;
+                border-radius: 6px;
+
+                VerticalLayout {
+                    padding: 6px;
+                    spacing: 0px;
+                    MenuEntry {
+                        text: "Start Job at Step";
+                        available: root.menu-can-start;
+                        submenu: true;
+                        entered => { root.steps-menu-open = true; }
+                        activated => { root.steps-menu-open = true; }
+                    }
+                    MenuEntry {
+                        text: "Stop Job";
+                        available: root.menu-can-stop;
+                        entered => { root.steps-menu-open = false; }
+                        activated => {
+                            root.job-menu-open = false;
+                            root.confirm-stop-visible = true;
+                        }
+                    }
+                    Rectangle { height: 9px; Rectangle { y: 4px; height: 1px; width: parent.width; background: Theme.divider; } }
+                    MenuEntry {
+                        text: "Enable Job";
+                        available: root.menu-can-enable;
+                        entered => { root.steps-menu-open = false; }
+                        activated => {
+                            root.job-menu-open = false;
+                            root.set-enabled-requested(root.job-menu-id, true);
+                        }
+                    }
+                    MenuEntry {
+                        text: "Disable Job";
+                        available: root.menu-can-disable;
+                        entered => { root.steps-menu-open = false; }
+                        activated => {
+                            root.job-menu-open = false;
+                            root.set-enabled-requested(root.job-menu-id, false);
+                        }
+                    }
+                    Rectangle { height: 9px; Rectangle { y: 4px; height: 1px; width: parent.width; background: Theme.divider; } }
+                    MenuEntry {
+                        text: "Refresh Job";
+                        available: root.menu-can-refresh;
+                        entered => { root.steps-menu-open = false; }
+                        activated => {
+                            root.job-menu-open = false;
+                            root.refresh-job-requested(root.job-menu-id);
+                        }
+                    }
+                }
+            }
+
+            if root.steps-menu-open : Rectangle {
+                property <bool> flip: root.job-popup-x + root.job-menu-width + 272px > root.width;
+                x: max(8px, self.flip ? root.job-popup-x - 272px : root.job-popup-x + root.job-menu-width - 8px);
+                y: min(max(8px, root.job-popup-y), root.height - self.height - 8px);
+                width: 280px;
+                height: min(320px, 12px + max(root.job-steps.length, 1) * 30px);
+                background: Theme.menu;
+                border-color: Theme.border-strong;
+                border-width: 1px;
+                border-radius: 6px;
+                clip: true;
+
+                if root.job-steps.length == 0 : Text {
+                    x: 12px;
+                    text: root.steps-loading ? "Loading steps…" : "No steps found";
+                    color: Theme.muted-2;
+                    font-size: 12px;
+                    vertical-alignment: center;
+                    height: parent.height;
+                }
+                if root.job-steps.length > 0 : ScrollView {
+                    width: parent.width;
+                    height: parent.height;
+                    VerticalLayout {
+                        padding: 6px;
+                        spacing: 0px;
+                        for step in root.job-steps : MenuEntry {
+                            text: step.label;
+                            available: step.name != "" && root.menu-can-start;
+                            activated => {
+                                root.job-menu-open = false;
+                                root.steps-menu-open = false;
+                                root.start-at-step-requested(root.job-menu-id, step.name);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    AppTitleBar {
+        y: 0px;
+        width: parent.width;
+        pinned: root.pinned;
+        maximized: root.maximized;
+        theme-clicked => { Theme.mode = mod(Theme.mode + 1, 3); root.persist-requested(); }
+        pin-clicked => { root.pinned = !root.pinned; root.persist-requested(); }
+        github-clicked => { root.open-github-requested(); }
+        minimize-clicked => { root.minimized = true; }
+        maximize-clicked => { root.maximized = !root.maximized; }
+        close-clicked => { root.close(); }
+    }
+
+    if root.confirm-stop-visible : Rectangle {
+        background: #aa000000;
+        Rectangle {
+            width: 420px;
+            height: 190px;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            background: Theme.menu;
+            border-color: Theme.border-strong;
+            border-width: 1px;
+            border-radius: 8px;
+            VerticalLayout {
+                padding: 22px;
+                spacing: 14px;
+                Text { text: "Stop this job?"; color: Theme.text-strong; font-size: 19px; font-weight: 700; }
+                Text {
+                    text: "SQL Server Agent may need time to reach a safe stopping point. The canceled run will be recorded in history.";
+                    color: Theme.muted;
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+                HorizontalLayout {
+                    alignment: end;
+                    spacing: 8px;
+                    Button { text: "Cancel"; clicked => { root.confirm-stop-visible = false; } }
+                    Button {
+                        text: "Stop job";
+                        clicked => {
+                            root.confirm-stop-visible = false;
+                            root.stop-requested(root.selected-job-id);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
