@@ -274,6 +274,77 @@ fn finish_runs(mut runs: Vec<HistoryRun>) -> Vec<HistoryRun> {
     runs
 }
 
+/// "Last ran 3 min ago" from how many seconds have passed since the run.
+pub fn last_ran(seconds_ago: i64) -> String {
+    let elapsed = seconds_ago.max(0);
+    match elapsed {
+        0..=4 => "Last ran just now".to_owned(),
+        5..=59 => format!("Last ran {elapsed} seconds ago"),
+        60..=119 => "Last ran 1 min ago".to_owned(),
+        120..=3599 => format!("Last ran {} min ago", elapsed / 60),
+        3600..=7199 => "Last ran 1 hour ago".to_owned(),
+        7200..=86399 => format!("Last ran {} hours ago", elapsed / 3600),
+        86400..=172799 => "Last ran 1 day ago".to_owned(),
+        _ => format!("Last ran {} days ago", elapsed / 86400),
+    }
+}
+
+/// "Next run in 5 min" when the start is still ahead, or how overdue it is.
+pub fn next_run_in(seconds_until: i64) -> String {
+    if seconds_until < -4 {
+        let overdue = -seconds_until;
+        return match overdue {
+            0..=59 => format!("Next run was due {overdue} seconds ago"),
+            60..=119 => "Next run was due 1 min ago".to_owned(),
+            120..=3599 => format!("Next run was due {} min ago", overdue / 60),
+            3600..=7199 => "Next run was due 1 hour ago".to_owned(),
+            7200..=86399 => format!("Next run was due {} hours ago", overdue / 3600),
+            86400..=172799 => "Next run was due 1 day ago".to_owned(),
+            _ => format!("Next run was due {} days ago", overdue / 86400),
+        };
+    }
+    let until = seconds_until.max(0);
+    match until {
+        0..=4 => "Next run now".to_owned(),
+        5..=59 => format!("Next run in {until} seconds"),
+        60..=119 => "Next run in 1 min".to_owned(),
+        120..=3599 => format!("Next run in {} min", until / 60),
+        3600..=7199 => "Next run in 1 hour".to_owned(),
+        7200..=86399 => format!("Next run in {} hours", until / 3600),
+        86400..=172799 => "Next run in 1 day".to_owned(),
+        _ => format!("Next run in {} days", until / 86400),
+    }
+}
+
+/// Unix seconds for a SQL Agent `yyyy-MM-dd HH:mm:ss` value in the local timezone.
+pub fn local_epoch(raw: &str) -> i32 {
+    let Ok(naive) = chrono::NaiveDateTime::parse_from_str(raw.trim(), "%Y-%m-%d %H:%M:%S") else {
+        return 0;
+    };
+    let zoned = naive.and_local_timezone(chrono::Local);
+    let timestamp = zoned
+        .single()
+        .or_else(|| zoned.earliest())
+        .map(|value| value.timestamp())
+        .unwrap_or(0);
+    i32::try_from(timestamp).unwrap_or(0)
+}
+
+/// A short description of how long ago the job list was refreshed.
+pub fn relative_update(elapsed_seconds: i64) -> String {
+    let elapsed = elapsed_seconds.max(0);
+    match elapsed {
+        0..=4 => "Updated just now".to_owned(),
+        5..=59 => format!("Updated {elapsed} seconds ago"),
+        60..=119 => "Updated 1 min ago".to_owned(),
+        120..=3599 => format!("Updated {} min ago", elapsed / 60),
+        3600..=7199 => "Updated 1 hour ago".to_owned(),
+        7200..=86399 => format!("Updated {} hours ago", elapsed / 3600),
+        86400..=172799 => "Updated 1 day ago".to_owned(),
+        _ => format!("Updated {} days ago", elapsed / 86400),
+    }
+}
+
 /// Converts `yyyy-MM-dd HH:mm:ss` from SQL Server into `yyyy-MM-dd h:mm:ss AM/PM`.
 pub fn format_timestamp(raw: &str) -> String {
     chrono::NaiveDateTime::parse_from_str(raw.trim(), "%Y-%m-%d %H:%M:%S")

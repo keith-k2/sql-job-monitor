@@ -1,7 +1,8 @@
 use crate::{
     domain::{
         category_summary, command_availability, filter_and_sort, format_duration, format_timestamp,
-        group_runs, include_active_run, status_counts,
+        group_runs, include_active_run, last_ran, local_epoch, next_run_in, relative_update,
+        status_counts,
         timeline::{build_timeline, TimelineHistory, TimelineLane},
         ActiveRun, HistoryRun, Job, SortColumn,
     },
@@ -193,6 +194,75 @@ fn fill_saved_form(ui: &MainWindow, id: &str) {
     ui.set_form_username(saved.username.into());
     ui.set_form_windows_auth(saved.windows_auth);
     ui.set_form_trust_certificate(saved.trust_server_certificate);
+}
+
+fn move_job_selection(ui: &MainWindow, delta: i32) {
+    use slint::Model;
+    let jobs = ui.get_jobs();
+    let count = jobs.row_count();
+    if count == 0 {
+        return;
+    }
+    let selected = ui.get_selected_job_id();
+    let current =
+        (0..count).find(|&index| jobs.row_data(index).is_some_and(|row| row.id == selected));
+    let next = match current {
+        Some(index) => {
+            let Some(next) = i32::try_from(index)
+                .ok()
+                .and_then(|index| index.checked_add(delta))
+            else {
+                return;
+            };
+            if next < 0 || usize::try_from(next).is_ok_and(|next| next >= count) {
+                return;
+            }
+            next as usize
+        }
+        None => {
+            if delta < 0 {
+                count - 1
+            } else {
+                0
+            }
+        }
+    };
+    let Some(row) = jobs.row_data(next) else {
+        return;
+    };
+    ui.set_job_menu_open(false);
+    ui.set_steps_menu_open(false);
+    ui.set_time_tip_open(false);
+    ui.set_selected_job_id(row.id.clone());
+    ui.set_selected_job_name(row.name.clone());
+    ui.set_selected_job_status(row.status.clone());
+    ui.set_selected_job_step(row.current_step.clone());
+    ui.invoke_job_selected(row.id.clone(), row.name.clone(), row.status);
+    ui.set_selection_scroll_row(i32::try_from(next).unwrap_or(0));
+    ui.set_selection_scroll_tick(ui.get_selection_scroll_tick().wrapping_add(1));
+}
+
+fn refreshed_ago(epoch: i32) -> String {
+    if epoch <= 0 {
+        return "Not updated yet".to_owned();
+    }
+    relative_update(Local::now().timestamp() - i64::from(epoch))
+}
+
+fn schedule_phrase(kind: &str, epoch: i32) -> String {
+    if epoch <= 0 {
+        return if kind == "next" {
+            "No next run".to_owned()
+        } else {
+            "No last run".to_owned()
+        };
+    }
+    let delta = Local::now().timestamp() - i64::from(epoch);
+    if kind == "next" {
+        next_run_in(-delta)
+    } else {
+        last_ran(delta)
+    }
 }
 
 fn apply_dark_title(window: &slint::winit_030::winit::window::Window) -> bool {
@@ -422,6 +492,27 @@ impl Application {
         fill_saved_form(&self.ui, &settings.last_connection_id);
         self.install_callbacks();
         enable_dark_title_bar(&self.ui);
+        let ui_weak = self.ui.as_weak();
+        self.runtime.spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                let updated = ui_weak.upgrade_in_event_loop(|ui| {
+                    ui.set_refreshed_ago(refreshed_ago(ui.get_last_refreshed_epoch()).into());
+                    if ui.get_time_tip_open() {
+                        ui.set_time_tip_text(
+                            schedule_phrase(
+                                ui.get_time_tip_kind().as_str(),
+                                ui.get_time_tip_epoch(),
+                            )
+                            .into(),
+                        );
+                    }
+                });
+                if updated.is_err() {
+                    break;
+                }
+            }
+        });
         self.ui.run()?;
         if let Some(token) = self.state.lock().expect("state poisoned").polling.take() {
             token.cancel();
@@ -444,6 +535,18 @@ impl Application {
         self.ui.on_persist_requested(move || {
             if let Some(ui) = ui_weak.upgrade() {
                 persist_layout(&ui, None);
+            }
+        });
+        let ui_weak = self.ui.as_weak();
+        self.ui.on_move_selection_requested(move |delta| {
+            if let Some(ui) = ui_weak.upgrade() {
+                move_job_selection(&ui, delta);
+            }
+        });
+        let ui_weak = self.ui.as_weak();
+        self.ui.on_time_tip_changed(move |kind, epoch| {
+            if let Some(ui) = ui_weak.upgrade() {
+                ui.set_time_tip_text(schedule_phrase(kind.as_str(), epoch).into());
             }
         });
         let ui_weak = self.ui.as_weak();
@@ -588,6 +691,10 @@ impl Application {
                 ui.set_selected_job_name("".into());
                 ui.set_selected_job_status("".into());
                 ui.set_selected_job_step("".into());
+                ui.set_last_refreshed("Never".into());
+                ui.set_last_refreshed_epoch(0);
+                ui.set_refreshed_ago("Not updated yet".into());
+                ui.set_updated_tip_open(false);
             }
         });
 
@@ -1055,6 +1162,8 @@ fn begin_connect(request: ConnectRequest) {
                     ui.set_server_label(label.into());
                     ui.set_status_message("Connected".into());
                     ui.set_last_refreshed("Never".into());
+                    ui.set_last_refreshed_epoch(0);
+                    ui.set_refreshed_ago("Not updated yet".into());
                     if save_error.is_none() {
                         publish_saved(&ui);
                     }
@@ -1185,7 +1294,9 @@ async fn refresh_jobs(
                 let selected = selected_snapshot(&state);
                 (rows, choices, summary, selected, counts)
             };
-            let refreshed = Local::now().format("%Y-%m-%d %-I:%M:%S %p").to_string();
+            let now = Local::now();
+            let refreshed = now.format("%Y-%m-%d %-I:%M:%S %p").to_string();
+            let epoch = i32::try_from(now.timestamp()).unwrap_or(0);
             let status = format!("Connected - {total} jobs ({} shown)", rows.len());
             let history_target = selected.clone();
             let _ = ui_weak.upgrade_in_event_loop(move |ui| {
@@ -1194,6 +1305,8 @@ async fn refresh_jobs(
                 set_category_view(&ui, choices, summary);
                 apply_selected(&ui, selected.as_ref());
                 ui.set_last_refreshed(refreshed.into());
+                ui.set_last_refreshed_epoch(epoch);
+                ui.set_refreshed_ago(relative_update(0).into());
                 ui.set_status_message(status.into());
                 ui.set_error_message("".into());
                 ui.set_busy(false);
@@ -1426,8 +1539,10 @@ fn job_model(jobs: Vec<Job>) -> ModelRc<JobRow> {
                 status: job.status.label().into(),
                 current_step: job.current_step.into(),
                 last_run: format_timestamp(&job.last_run).into(),
+                last_run_epoch: local_epoch(&job.last_run),
                 duration: format_duration(job.last_duration_seconds).into(),
                 next_run: format_timestamp(&job.next_run).into(),
+                next_run_epoch: local_epoch(&job.next_run),
                 owner: job.owner.into(),
                 category: job.category.into(),
             })
@@ -1661,4 +1776,54 @@ fn set_busy(ui_weak: &Weak<MainWindow>, busy: bool) {
     let _ = ui_weak
         .clone()
         .upgrade_in_event_loop(move |ui| ui.set_busy(busy));
+}
+
+#[cfg(test)]
+mod selection_tests {
+    use super::move_job_selection;
+    use crate::{JobRow, MainWindow};
+    use slint::{ModelRc, VecModel};
+
+    fn job_row(id: &str, name: &str) -> JobRow {
+        JobRow {
+            id: id.into(),
+            name: name.into(),
+            enabled: true,
+            running: false,
+            status: "Succeeded".into(),
+            current_step: String::new().into(),
+            last_run: String::new().into(),
+            last_run_epoch: 0,
+            duration: String::new().into(),
+            next_run: String::new().into(),
+            next_run_epoch: 0,
+            owner: String::new().into(),
+            category: "ETL".into(),
+        }
+    }
+
+    #[test]
+    fn arrows_move_the_highlighted_job() {
+        let ui = MainWindow::new().expect("window");
+        ui.set_connected(true);
+        ui.set_timeline_days(0);
+        ui.set_jobs(ModelRc::new(VecModel::from(vec![
+            job_row("a", "Alpha"),
+            job_row("b", "Beta"),
+            job_row("c", "Gamma"),
+        ])));
+
+        move_job_selection(&ui, 1);
+        assert_eq!(ui.get_selected_job_id().as_str(), "a");
+        move_job_selection(&ui, 1);
+        assert_eq!(ui.get_selected_job_id().as_str(), "b");
+        move_job_selection(&ui, -1);
+        assert_eq!(ui.get_selected_job_id().as_str(), "a");
+        move_job_selection(&ui, -1);
+        assert_eq!(ui.get_selected_job_id().as_str(), "a");
+        move_job_selection(&ui, 1);
+        move_job_selection(&ui, 1);
+        move_job_selection(&ui, 1);
+        assert_eq!(ui.get_selected_job_id().as_str(), "c");
+    }
 }

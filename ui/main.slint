@@ -10,8 +10,10 @@ export struct JobRow {
     status: string,
     current-step: string,
     last-run: string,
+    last-run-epoch: int,
     duration: string,
     next-run: string,
+    next-run-epoch: int,
     owner: string,
     category: string,
 }
@@ -127,6 +129,16 @@ global Columns {
     }
 }
 
+// Lucide icons (assets/lucide, ISC). They are stroke-only SVGs, so the tint
+// recolors the whole glyph.
+component LucideIcon inherits Image {
+    in property <color> tint: Theme.text;
+    width: 16px;
+    height: 16px;
+    image-fit: contain;
+    colorize: root.tint;
+}
+
 component StatusChip inherits Rectangle {
     in property <string> label;
     in property <int> count;
@@ -165,15 +177,26 @@ component StatusChip inherits Rectangle {
 
 component ToggleChip inherits Rectangle {
     in property <string> text;
+    in property <image> icon;
+    in property <bool> has-icon: false;
     in property <bool> selected: false;
     callback clicked();
     height: 28px;
     min-width: chip-text.preferred-width + 20px;
+    horizontal-stretch: 0;
     border-radius: 6px;
     border-width: 1px;
     border-color: root.selected ? Theme.splitter-active : Theme.border;
     background: root.selected ? Theme.selected-soft : chip-touch.has-hover ? Theme.hover : transparent;
 
+    if root.has-icon : LucideIcon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: 14px;
+        height: 14px;
+        source: root.icon;
+        tint: root.selected ? Theme.info : Theme.text-body;
+    }
     chip-text := Text {
         text: root.text;
         color: root.selected ? Theme.info : Theme.text-body;
@@ -208,14 +231,13 @@ component LegendSwatch inherits HorizontalLayout {
     }
 }
 
-component Chevron inherits Path {
+component Chevron inherits LucideIcon {
     in property <bool> open: false;
     in property <color> color: Theme.heading;
-    width: 10px;
-    height: 10px;
-    stroke: root.color;
-    stroke-width: 1.6px;
-    commands: root.open ? "M 1 3 L 5 8 L 9 3" : "M 3 1 L 8 5 L 3 9";
+    width: 12px;
+    height: 12px;
+    tint: root.color;
+    source: root.open ? @image-url("../assets/lucide/chevron-down.svg") : @image-url("../assets/lucide/chevron-right.svg");
 }
 
 component OutcomeText inherits Text {
@@ -231,35 +253,33 @@ component OutcomeText inherits Text {
 component SortIcon inherits Rectangle {
     // 0 = not sorted, 1 = ascending, 2 = descending
     in property <int> state: 0;
-    width: 10px;
+    width: 12px;
     height: 14px;
 
-    Path {
+    LucideIcon {
         x: 0px;
-        y: 0px;
-        width: 10px;
-        height: 6px;
-        fill: root.state == 1 ? Theme.info : Theme.icon-muted;
-        commands: "M 0 6 L 5 0 L 10 6 Z";
+        y: -3px;
+        width: 12px;
+        height: 12px;
+        source: @image-url("../assets/lucide/chevron-up.svg");
+        tint: root.state == 1 ? Theme.info : Theme.icon-muted;
     }
-    Path {
+    LucideIcon {
         x: 0px;
-        y: 8px;
-        width: 10px;
-        height: 6px;
-        fill: root.state == 2 ? Theme.info : Theme.icon-muted;
-        commands: "M 0 0 L 10 0 L 5 6 Z";
+        y: 5px;
+        width: 12px;
+        height: 12px;
+        source: @image-url("../assets/lucide/chevron-down.svg");
+        tint: root.state == 2 ? Theme.info : Theme.icon-muted;
     }
 }
 
-component FilterIcon inherits Path {
+component FilterIcon inherits LucideIcon {
     in property <bool> active: false;
     width: 12px;
     height: 12px;
-    fill: root.active ? Theme.info : transparent;
-    stroke: root.active ? Theme.info : Theme.muted-2;
-    stroke-width: 1.3px;
-    commands: "M 1 1 L 11 1 L 7 6 L 7 11 L 5 10 L 5 6 Z";
+    source: @image-url("../assets/lucide/filter.svg");
+    tint: root.active ? Theme.info : Theme.muted-2;
 }
 
 component GridCell inherits Rectangle {
@@ -573,17 +593,14 @@ component CaptionIcon inherits Rectangle {
     }
 }
 
-component WindowMark inherits Path {
+component WindowMark inherits LucideIcon {
     in property <int> kind: 0;
-    width: 12px;
-    height: 12px;
-    stroke: Theme.text;
-    stroke-width: 1.3px;
-    fill: transparent;
-    commands: root.kind == 0 ? "M 1 6 L 11 6" :
-              root.kind == 1 ? "M 1.5 2.5 L 10.5 2.5 L 10.5 10.5 L 1.5 10.5 Z" :
-              root.kind == 2 ? "M 3.5 1.5 L 10.5 1.5 L 10.5 7.5 L 3.5 7.5 Z M 1.5 4.5 L 7.5 4.5 L 7.5 10.5 L 1.5 10.5 Z" :
-              "M 2 2 L 10 10 M 10 2 L 2 10";
+    width: 14px;
+    height: 14px;
+    source: root.kind == 0 ? @image-url("../assets/lucide/minus.svg") :
+            root.kind == 1 ? @image-url("../assets/lucide/square.svg") :
+            root.kind == 2 ? @image-url("../assets/lucide/copy.svg") :
+            @image-url("../assets/lucide/x.svg");
 }
 
 component AppTitleBar inherits Rectangle {
@@ -634,58 +651,33 @@ component AppTitleBar inherits Rectangle {
             CaptionIcon {
                 tip: Theme.mode-label;
                 clicked => { root.theme-clicked(); }
-                if Theme.mode == 2 : Path {
+                LucideIcon {
                     x: 10px;
                     y: 8px;
-                    width: 16px;
-                    height: 16px;
-                    stroke: Theme.warn;
-                    stroke-width: 1.4px;
-                    fill: transparent;
-                    commands: "M 8 2 L 8 4 M 8 12 L 8 14 M 2 8 L 4 8 M 12 8 L 14 8 M 3.8 3.8 L 5.2 5.2 M 10.8 10.8 L 12.2 12.2 M 12.2 3.8 L 10.8 5.2 M 5.2 10.8 L 3.8 12.2 M 8 5.2 A 2.8 2.8 0 1 0 8 10.8 A 2.8 2.8 0 1 0 8 5.2";
-                }
-                if Theme.mode == 1 : Path {
-                    x: 10px;
-                    y: 8px;
-                    width: 16px;
-                    height: 16px;
-                    fill: Theme.info;
-                    commands: "M 10 3 C 7 4 5.5 6.5 5.5 8.5 C 5.5 11.5 7.5 14 10.5 14.5 C 7 14 4 11.2 4 8 C 4 4.8 7 2.5 10 3 Z";
-                }
-                if Theme.mode == 0 : Path {
-                    x: 10px;
-                    y: 8px;
-                    width: 16px;
-                    height: 16px;
-                    stroke: Theme.text;
-                    stroke-width: 1.3px;
-                    fill: transparent;
-                    commands: "M 2 3.5 L 14 3.5 L 14 11 L 2 11 Z M 6.5 13.5 L 9.5 13.5 M 8 11 L 8 13.5";
+                    source: Theme.mode == 2 ? @image-url("../assets/lucide/sun.svg") :
+                            Theme.mode == 1 ? @image-url("../assets/lucide/moon.svg") :
+                            @image-url("../assets/lucide/monitor.svg");
+                    tint: Theme.mode == 2 ? Theme.warn : Theme.mode == 1 ? Theme.info : Theme.text;
                 }
             }
             CaptionIcon {
                 active: root.pinned;
                 tip: root.pinned ? "Unpin window" : "Keep window on top";
                 clicked => { root.pin-clicked(); }
-                Path {
+                LucideIcon {
                     x: 10px;
-                    y: 7px;
-                    width: 16px;
-                    height: 16px;
-                    fill: root.pinned ? Theme.info : Theme.text;
-                    commands: "M 6 2 L 10.5 2 L 11.5 6.2 L 14.2 7.4 L 9.2 12.2 L 9.6 15 L 6.6 15 L 7 12.2 L 2 7.4 L 4.7 6.2 Z";
+                    y: 8px;
+                    source: root.pinned ? @image-url("../assets/lucide/pin.svg") : @image-url("../assets/lucide/pin-off.svg");
+                    tint: root.pinned ? Theme.info : Theme.text;
                 }
             }
             CaptionIcon {
                 tip: "GitHub";
                 clicked => { root.github-clicked(); }
-                Path {
+                LucideIcon {
                     x: 10px;
                     y: 8px;
-                    width: 16px;
-                    height: 16px;
-                    fill: Theme.text;
-                    commands: "M 8 1.5 C 4.4 1.5 1.5 4.4 1.5 8 C 1.5 11 3.5 13.5 6.2 14.4 C 6.5 14.5 6.6 14.3 6.6 14.1 C 6.6 13.9 6.6 13.4 6.6 12.8 C 4.9 13.2 4.5 12.1 4.5 12.1 C 4.2 11.3 3.8 11.1 3.8 11.1 C 3.3 10.7 3.9 10.7 3.9 10.7 C 4.5 10.8 4.8 11.4 4.8 11.4 C 5.3 12.3 6.2 12 6.5 11.9 C 6.6 11.5 6.8 11.2 6.9 11.1 C 5.5 10.9 4 10.3 4 7.9 C 4 7.1 4.3 6.5 4.7 6 C 4.6 5.8 4.4 5.1 4.8 4.2 C 4.8 4.2 5.4 4 6.6 4.8 C 7.1 4.7 7.6 4.6 8.1 4.6 C 8.6 4.6 9.1 4.7 9.6 4.8 C 10.8 4 11.4 4.2 11.4 4.2 C 11.8 5.1 11.6 5.8 11.5 6 C 11.9 6.5 12.2 7.1 12.2 7.9 C 12.2 10.3 10.7 10.9 9.3 11.1 C 9.5 11.3 9.7 11.6 9.7 12.1 C 9.7 12.8 9.7 13.9 9.7 14.1 C 9.7 14.3 9.8 14.5 10.1 14.4 C 12.8 13.5 14.5 11 14.5 8 C 14.5 4.4 11.6 1.5 8 1.5 Z";
+                    source: @image-url("../assets/lucide/github.svg");
                 }
             }
 
@@ -695,14 +687,14 @@ component AppTitleBar inherits Rectangle {
                 width: 46px;
                 height: 40px;
                 background: min-touch.has-hover ? Theme.hover : transparent;
-                WindowMark { x: 17px; y: 14px; kind: 0; }
+                WindowMark { x: 16px; y: 13px; kind: 0; }
                 min-touch := TouchArea { clicked => { root.minimize-clicked(); } }
             }
             Rectangle {
                 width: 46px;
                 height: 40px;
                 background: max-touch.has-hover ? Theme.hover : transparent;
-                WindowMark { x: 17px; y: 14px; kind: root.maximized ? 2 : 1; }
+                WindowMark { x: 16px; y: 13px; kind: root.maximized ? 2 : 1; }
                 max-touch := TouchArea { clicked => { root.maximize-clicked(); } }
             }
             Rectangle {
@@ -710,10 +702,10 @@ component AppTitleBar inherits Rectangle {
                 height: 40px;
                 background: close-touch.has-hover ? #c42b1c : transparent;
                 WindowMark {
-                    x: 17px;
-                    y: 14px;
+                    x: 16px;
+                    y: 13px;
                     kind: 3;
-                    stroke: close-touch.has-hover ? #ffffff : Theme.text;
+                    tint: close-touch.has-hover ? #ffffff : Theme.text;
                 }
                 close-touch := TouchArea { clicked => { root.close-clicked(); } }
             }
@@ -748,6 +740,37 @@ export component MainWindow inherits Window {
     in-out property <string> status-message: "Not connected";
     in-out property <string> error-message: "";
     in-out property <string> last-refreshed: "Never";
+    in-out property <int> last-refreshed-epoch: 0;
+    in-out property <string> refreshed-ago: "Not updated yet";
+    in-out property <bool> updated-tip-open: false;
+    in-out property <length> updated-tip-x: 0px;
+    in-out property <length> updated-tip-y: 0px;
+    // Filled after layout so the right-hand toolbar group can be checked.
+    in-out property <length> toolbar-actions-right: 0px;
+    in-out property <length> toolbar-row-width: 0px;
+    in-out property <length> toolbar-left-width: 0px;
+    in-out property <length> toolbar-left-content: 0px;
+    in-out property <length> job-grid-x: 0px;
+    in-out property <length> job-grid-width: 0px;
+    in-out property <int> selection-scroll-row: -1;
+    in-out property <int> selection-scroll-tick: 0;
+    callback move-selection-requested(int);
+    in-out property <bool> time-tip-open: false;
+    in-out property <string> time-tip-text: "";
+    in-out property <string> time-tip-kind: "";
+    in-out property <int> time-tip-epoch: 0;
+    in-out property <length> time-tip-x: 0px;
+    in-out property <length> time-tip-y: 0px;
+    callback time-tip-changed(string, int);
+
+    function show-time-tip(kind: string, epoch: int, x: length, y: length) {
+        root.time-tip-kind = kind;
+        root.time-tip-epoch = epoch;
+        root.time-tip-x = x;
+        root.time-tip-y = y + 18px;
+        root.time-tip-open = true;
+        root.time-tip-changed(kind, epoch);
+    }
     in-out property <[JobRow]> jobs;
     in-out property <[StatusCountRow]> status-counts;
     // 0 shows the grid; otherwise the timeline covers this many days.
@@ -763,7 +786,7 @@ export component MainWindow inherits Window {
     in-out property <bool> timeline-zoom-saved: false;
     in-out property <string> timeline-hover: "";
     in-out property <string> timeline-hover-id: "";
-    property <length> timeline-name-width: 0px;
+    property <length> timeline-name-width: 240px;
     property <length> timeline-lane-height: 38px;
     property <int> timeline-tick-minutes:
         root.timeline-pph >= 960px ? 5 :
@@ -834,9 +857,36 @@ export component MainWindow inherits Window {
     property <bool> menu-can-disable: root.job-menu-id != "" && root.job-menu-enabled && !root.busy;
     property <bool> menu-can-refresh: root.job-menu-id != "" && !root.busy;
     property <length> job-menu-width: 196px;
-    // The menu's right edge sits on the pointer, and stays inside this window.
-    property <length> job-popup-x: min(max(8px, root.job-menu-x - root.job-menu-width), root.width - root.job-menu-width - 8px);
-    property <length> job-popup-y: min(max(8px, root.job-menu-y), root.height - 188px);
+    property <length> job-menu-height: 180px;
+    property <length> job-row-height: 34px;
+    // Window coordinates. The menu opens at the pointer and flips left or up
+    // when it would leave the window.
+    property <length> job-popup-x: max(8px, root.job-menu-x + root.job-menu-width + 8px > root.width ? root.job-menu-x - root.job-menu-width : root.job-menu-x);
+    property <length> job-popup-y: max(8px, root.job-menu-y + root.job-menu-height + 8px > root.height ? root.job-menu-y - root.job-menu-height : root.job-menu-y);
+
+    function select-job(row: int) {
+        root.selected-job-id = root.jobs[row].id;
+        root.selected-job-name = root.jobs[row].name;
+        root.selected-job-status = root.jobs[row].status;
+        root.selected-job-step = root.jobs[row].current-step;
+        root.job-selected(root.jobs[row].id, root.jobs[row].name, root.jobs[row].status);
+    }
+
+    function open-job-menu(row: int, x: length, y: length) {
+        root.status-menu-open = false;
+        root.category-menu-open = false;
+        root.steps-menu-open = false;
+        root.job-menu-id = root.jobs[row].id;
+        root.job-menu-enabled = root.jobs[row].enabled;
+        root.job-menu-running = root.jobs[row].running;
+        root.job-menu-x = x;
+        root.job-menu-y = y;
+        root.job-menu-open = true;
+        if root.selected-job-id != root.jobs[row].id {
+            root.select-job(row);
+        }
+        root.steps-requested(root.jobs[row].id);
+    }
     in-out property <string> category-label: "ETL";
     in-out property <[SavedConnectionRow]> saved-connections;
     in-out property <string> form-server: "";
@@ -1097,120 +1147,201 @@ export component MainWindow inherits Window {
         spacing: 0px;
 
         Rectangle {
-            height: 44px;
+            width: parent.width;
+            height: 96px;
             background: Theme.surface;
             border-color: Theme.border;
             border-width: 1px;
+            VerticalLayout {
+                width: parent.width;
+                spacing: 0px;
 
-            HorizontalLayout {
-                padding-left: 12px;
-                padding-right: 10px;
-                spacing: 8px;
-                alignment: start;
-                cross-axis-alignment: center;
-                Text { text: root.server-label; color: Theme.text-body; font-size: 12px; vertical-alignment: center; }
-                Text { text: root.status-message; color: Theme.ok; font-size: 11px; vertical-alignment: center; }
                 Rectangle {
-                    min-width: 0px;
-                    horizontal-stretch: 1;
-                    clip: true;
-                    HorizontalLayout {
-                        spacing: 6px;
-                        alignment: start;
-                        cross-axis-alignment: center;
-                        Rectangle {
-                            height: 28px;
-                            border-radius: 6px;
-                            background: root.job-status-filter == "All" ? Theme.selected-soft : all-jobs-touch.has-hover ? Theme.hover : transparent;
-                            HorizontalLayout {
-                                padding-left: 8px;
-                                padding-right: 8px;
-                                Text {
-                                    text: "Show all jobs";
-                                    color: Theme.text;
+                    width: parent.width;
+                    height: 48px;
+                    toolbar-row := Rectangle {
+                        width: parent.width;
+                        height: parent.height;
+                        left-group := Rectangle {
+                            x: 16px;
+                            y: 0px;
+                            width: max(0px, parent.width - 16px - right-actions.preferred-width - 12px - 16px);
+                            height: parent.height;
+                            clip: true;
+                            left-layout := HorizontalLayout {
+                                x: 0px;
+                                y: 0px;
+                                width: parent.width;
+                                height: parent.height;
+                                spacing: 12px;
+                                alignment: start;
+                                cross-axis-alignment: center;
+                                VerticalLayout {
+                                    alignment: center;
+                                    spacing: 0px;
+                                    Text { text: root.server-label; color: Theme.text-body; font-size: 13px; }
+                                    Text { text: root.status-message; color: Theme.ok; font-size: 11px; }
+                                }
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    alignment: start;
+                                    cross-axis-alignment: center;
+                                    Rectangle {
+                                        height: 28px;
+                                        border-radius: 6px;
+                                        background: root.job-status-filter == "All" ? Theme.selected-soft : all-jobs-touch.has-hover ? Theme.hover : transparent;
+                                        HorizontalLayout {
+                                            padding-left: 8px;
+                                            padding-right: 8px;
+                                            Text {
+                                                text: "Show all jobs";
+                                                color: Theme.text;
+                                                font-size: 12px;
+                                                font-weight: 600;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+                                        all-jobs-touch := TouchArea {
+                                            mouse-cursor: pointer;
+                                            clicked => {
+                                                root.job-status-filter = "All";
+                                                root.filters-changed(search-input.text, "All");
+                                            }
+                                        }
+                                    }
+                                    for item in root.status-counts : StatusChip {
+                                        label: item.label;
+                                        count: item.count;
+                                        selected: root.job-status-filter == item.label;
+                                        clicked => {
+                                            root.job-status-filter = item.label;
+                                            root.filters-changed(search-input.text, item.label);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        right-actions := HorizontalLayout {
+                            x: parent.width - self.preferred-width - 12px;
+                            y: 0px;
+                            width: self.preferred-width;
+                            height: parent.height;
+                            spacing: 12px;
+                            alignment: end;
+                            cross-axis-alignment: center;
+                            Rectangle {
+                                width: updated-text.preferred-width;
+                                height: parent.height;
+                                updated-text := Text {
+                                    text: "Updated " + root.last-refreshed;
+                                    color: Theme.muted;
                                     font-size: 12px;
-                                    font-weight: 600;
                                     vertical-alignment: center;
                                 }
+                                TouchArea {
+                                    mouse-cursor: default;
+                                    changed has-hover => {
+                                        root.updated-tip-open = self.has-hover;
+                                        if self.has-hover {
+                                            root.updated-tip-x = self.absolute-position.x + self.width;
+                                            root.updated-tip-y = self.absolute-position.y + self.height + 6px;
+                                        }
+                                    }
+                                }
                             }
-                            all-jobs-touch := TouchArea {
-                                mouse-cursor: pointer;
-                                clicked => {
-                                    root.job-status-filter = "All";
-                                    root.filters-changed(search-input.text, "All");
+                            Button {
+                                text: "Refresh";
+                                enabled: !root.busy;
+                                clicked => { root.refresh-requested(); }
+                            }
+                            disconnect-button := Button {
+                                text: "Disconnect";
+                                clicked => { root.disconnect-requested(); }
+                            }
+                        }
+                    }
+                    property <length> actions-right: disconnect-button.absolute-position.x + disconnect-button.width;
+                    property <length> row-width: toolbar-row.width;
+                    property <length> left-width: left-group.width;
+                    property <length> left-content: left-layout.preferred-width;
+                    property <length> grid-x: job-grid.absolute-position.x;
+                    property <length> grid-width: job-grid.width;
+                    changed grid-x => { root.job-grid-x = self.grid-x; }
+                    changed grid-width => { root.job-grid-width = self.grid-width; }
+                    changed left-width => { root.toolbar-left-width = self.left-width; }
+                    changed left-content => { root.toolbar-left-content = self.left-content; }
+                    changed actions-right => { root.toolbar-actions-right = self.actions-right; }
+                    changed row-width => { root.toolbar-row-width = self.row-width; }
+                    Rectangle { y: parent.height - 1px; width: parent.width; height: 1px; background: Theme.line; }
+                }
+
+                Rectangle {
+                    width: parent.width;
+                    height: 48px;
+                        HorizontalLayout {
+                        width: parent.width;
+                        height: parent.height;
+                        padding-left: 16px;
+                        padding-right: 12px;
+                        spacing: 10px;
+                        cross-axis-alignment: center;
+                        search-input := LineEdit {
+                            width: 280px;
+                            horizontal-stretch: 0;
+                            placeholder-text: "Search jobs, owner, or category";
+                            edited => { root.filters-changed(self.text, root.job-status-filter); }
+                        }
+                        focus-watch := Rectangle {
+                            width: 0px;
+                            height: 0px;
+                            property <int> tick: root.search-focus-tick;
+                            changed tick => { search-input.focus(); }
+                        }
+                        ToggleChip {
+                            text: "Grid";
+                            selected: root.timeline-days == 0;
+                            clicked => {
+                                root.timeline-days = 0;
+                                root.timeline-hover = "";
+                                root.timeline-hover-id = "";
+                                root.timeline-requested(0);
+                            }
+                        }
+                        ToggleChip {
+                            text: "Timeline";
+                            selected: root.timeline-days > 0;
+                            clicked => {
+                                if root.timeline-days == 0 {
+                                    root.timeline-days = root.timeline-range;
+                                    root.timeline-requested(root.timeline-days);
                                 }
                             }
                         }
-                        for item in root.status-counts : StatusChip {
-                            label: item.label;
-                            count: item.count;
-                            selected: root.job-status-filter == item.label;
-                            clicked => {
-                                root.job-status-filter = item.label;
-                                root.filters-changed(search-input.text, item.label);
+                        Rectangle { horizontal-stretch: 1; }
+                        CheckBox {
+                            horizontal-stretch: 0;
+                            text: "Auto refresh";
+                            checked: root.auto-refresh;
+                            toggled => {
+                                root.auto-refresh = self.checked;
+                                root.refresh-settings-changed(root.auto-refresh, root.refresh-seconds);
                             }
                         }
-                    }
-                }
-                search-input := LineEdit {
-                    width: 200px;
-                    placeholder-text: "Search jobs";
-                    edited => { root.filters-changed(self.text, root.job-status-filter); }
-                }
-                focus-watch := Rectangle {
-                    width: 0px;
-                    height: 0px;
-                    property <int> tick: root.search-focus-tick;
-                    changed tick => { search-input.focus(); }
-                }
-                ToggleChip {
-                    text: "Grid";
-                    selected: root.timeline-days == 0;
-                    clicked => {
-                        root.timeline-days = 0;
-                        root.timeline-hover = "";
-                        root.timeline-hover-id = "";
-                        root.timeline-requested(0);
-                    }
-                }
-                ToggleChip {
-                    text: "Timeline";
-                    selected: root.timeline-days > 0;
-                    clicked => {
-                        if root.timeline-days == 0 {
-                            root.timeline-days = root.timeline-range;
-                            root.timeline-requested(root.timeline-days);
+                        Text { text: "Every"; color: Theme.muted; vertical-alignment: center; font-size: 12px; }
+                        SpinBox {
+                            width: 80px;
+                            horizontal-stretch: 0;
+                            value: root.refresh-seconds;
+                            minimum: 2;
+                            maximum: 300;
+                            edited(value) => {
+                                root.refresh-seconds = value;
+                                root.refresh-settings-changed(root.auto-refresh, value);
+                            }
                         }
+                        Text { text: "seconds"; color: Theme.muted; vertical-alignment: center; font-size: 12px; }
                     }
                 }
-                Text {
-                    text: "Updated " + root.last-refreshed;
-                    color: Theme.muted;
-                    font-size: 11px;
-                    vertical-alignment: center;
-                }
-                CheckBox {
-                    text: "Auto refresh";
-                    checked: root.auto-refresh;
-                    toggled => {
-                        root.auto-refresh = self.checked;
-                        root.refresh-settings-changed(root.auto-refresh, root.refresh-seconds);
-                    }
-                }
-                Text { text: "Every"; color: Theme.muted; vertical-alignment: center; font-size: 12px; }
-                SpinBox {
-                    width: 72px;
-                    value: root.refresh-seconds;
-                    minimum: 2;
-                    maximum: 300;
-                    edited(value) => {
-                        root.refresh-seconds = value;
-                        root.refresh-settings-changed(root.auto-refresh, value);
-                    }
-                }
-                Text { text: "s"; color: Theme.muted; vertical-alignment: center; font-size: 12px; }
-                Button { text: "Refresh"; enabled: !root.busy; clicked => { root.refresh-requested(); } }
-                Button { text: "Disconnect"; clicked => { root.disconnect-requested(); } }
             }
         }
 
@@ -1228,18 +1359,19 @@ export component MainWindow inherits Window {
             }
         }
 
-        HorizontalLayout {
-            spacing: 0px;
-            padding-left: 12px;
-            padding-right: 12px;
-            padding-bottom: 12px;
+        Rectangle {
+            width: parent.width;
+            vertical-stretch: 1;
 
-            Rectangle {
+            job-grid := Rectangle {
+                x: 12px;
+                y: 0px;
+                width: parent.width - 24px;
+                height: parent.height - 12px;
                 background: Theme.grid;
                 border-color: Theme.border;
                 border-width: 1px;
                 border-radius: 6px;
-                horizontal-stretch: 3;
                 clip: true;
 
                 if root.timeline-days == 0 : Rectangle {
@@ -1304,10 +1436,17 @@ export component MainWindow inherits Window {
                         y: column-header.height;
                         width: parent.width;
                         height: parent.height - self.y;
-                        VerticalLayout {
+                        content-width: max(jobs-list.preferred-width, self.visible-width);
+                        content-height: max(root.jobs.length * root.job-row-height, self.visible-height);
+                        Rectangle {
+                        width: max(jobs-list.preferred-width, jobs-scroll.visible-width);
+                        height: jobs-scroll.content-height;
+                        jobs-list := VerticalLayout {
+                            width: parent.width;
+                            alignment: start;
                             spacing: 0px;
                             for job[index] in root.jobs : Rectangle {
-                                height: 34px;
+                                height: root.job-row-height;
                                 background: root.selected-job-id == job.id ? Theme.selected : mod(index, 2) == 0 ? Theme.surface : Theme.row-alt;
                                 JobLine {
                                     width: parent.width;
@@ -1324,36 +1463,6 @@ export component MainWindow inherits Window {
                                     category: job.category;
                                 }
                                 Rectangle { y: parent.height - 1px; height: 1px; background: Theme.line; }
-                                TouchArea {
-                                    clicked => {
-                                        root.job-menu-open = false;
-                                        root.steps-menu-open = false;
-                                        root.selected-job-id = job.id;
-                                        root.selected-job-name = job.name;
-                                        root.selected-job-status = job.status;
-                                        root.selected-job-step = job.current-step;
-                                        root.job-selected(job.id, job.name, job.status);
-                                    }
-                                    pointer-event(event) => {
-                                        if event.button == PointerEventButton.right && event.kind == PointerEventKind.down {
-                                            root.status-menu-open = false;
-                                            root.category-menu-open = false;
-                                            root.steps-menu-open = false;
-                                            root.job-menu-id = job.id;
-                                            root.job-menu-enabled = job.enabled;
-                                            root.job-menu-running = job.running;
-                                            root.job-menu-x = self.absolute-position.x + self.mouse-x;
-                                            root.job-menu-y = self.absolute-position.y + self.mouse-y;
-                                            root.selected-job-id = job.id;
-                                            root.selected-job-name = job.name;
-                                            root.selected-job-status = job.status;
-                                            root.selected-job-step = job.current-step;
-                                            root.job-selected(job.id, job.name, job.status);
-                                            root.steps-requested(job.id);
-                                            root.job-menu-open = true;
-                                        }
-                                    }
-                                }
                             }
                             if root.jobs.length == 0 : Text {
                                 text: root.busy ? "Loading jobs…" : "No jobs match the current filters.";
@@ -1362,6 +1471,96 @@ export component MainWindow inherits Window {
                                 vertical-alignment: center;
                                 height: 80px;
                             }
+                        }
+                        // One handler for every row: rows are rebuilt on each refresh,
+                        // which would drop a click that lands on a row being replaced.
+                        TouchArea {
+                            width: parent.width;
+                            height: parent.height;
+                            property <length> last-run-x: Columns.name + Columns.status + Columns.enabled + Columns.step;
+                            property <length> next-run-x: last-run-x + Columns.last-run + Columns.duration;
+                            function update-time-tip(pointer-x: length, pointer-y: length) {
+                                let row = Math.floor(pointer-y / root.job-row-height);
+                                if row < 0 || row >= root.jobs.length {
+                                    root.time-tip-open = false;
+                                    return;
+                                }
+                                if pointer-x >= self.last-run-x && pointer-x < self.last-run-x + Columns.last-run {
+                                    root.show-time-tip("last", root.jobs[row].last-run-epoch, self.absolute-position.x + pointer-x, self.absolute-position.y + pointer-y);
+                                } else if pointer-x >= self.next-run-x && pointer-x < self.next-run-x + Columns.next-run {
+                                    root.show-time-tip("next", root.jobs[row].next-run-epoch, self.absolute-position.x + pointer-x, self.absolute-position.y + pointer-y);
+                                } else {
+                                    root.time-tip-open = false;
+                                }
+                            }
+                            changed has-hover => {
+                                if !self.has-hover {
+                                    root.time-tip-open = false;
+                                }
+                            }
+                            moved => { self.update-time-tip(self.mouse-x, self.mouse-y); }
+                            // The wheel belongs to the grid scroller. Accepting it here
+                            // would swallow the event and the list would not move.
+                            scroll-event(event) => {
+                                if event.delta-y == 0 && event.delta-x == 0 { return reject; }
+                                return reject;
+                            }
+                            clicked => {
+                                let row = Math.floor(self.pressed-y / root.job-row-height);
+                                if row >= 0 && row < root.jobs.length {
+                                    root.job-menu-open = false;
+                                    root.steps-menu-open = false;
+                                    root.select-job(row);
+                                    grid-keys.focus();
+                                }
+                            }
+                            pointer-event(event) => {
+                                if event.button == PointerEventButton.right && event.kind == PointerEventKind.down {
+                                    let row = Math.floor(self.mouse-y / root.job-row-height);
+                                    if row >= 0 && row < root.jobs.length {
+                                        root.open-job-menu(row, self.absolute-position.x + self.mouse-x, self.absolute-position.y + self.mouse-y);
+                                    }
+                                }
+                            }
+                        }
+                        }
+                    }
+
+                    grid-keys := FocusScope {
+                        width: 0px;
+                        height: 0px;
+                        init => { self.focus(); }
+                        key-pressed(event) => {
+                            if event.text == Key.UpArrow {
+                                root.move-selection-requested(-1);
+                                return accept;
+                            }
+                            if event.text == Key.DownArrow {
+                                root.move-selection-requested(1);
+                                return accept;
+                            }
+                            return reject;
+                        }
+                        key-released(event) => {
+                            if event.text == Key.UpArrow || event.text == Key.DownArrow {
+                                return accept;
+                            }
+                            return reject;
+                        }
+                    }
+                    property <int> reveal-watch: root.selection-scroll-tick;
+                    changed reveal-watch => { reveal-selected-row(root.selection-scroll-row); }
+                    function reveal-selected-row(row: int) {
+                        if row < 0 || row >= root.jobs.length { return; }
+                        let top = row * root.job-row-height;
+                        let bottom = top + root.job-row-height;
+                        let view-top = -jobs-scroll.content-y;
+                        let view-height = jobs-scroll.visible-height;
+                        if view-height <= 0px { return; }
+                        if top < view-top {
+                            jobs-scroll.content-y = -top;
+                        } else if bottom > view-top + view-height {
+                            jobs-scroll.content-y = view-height - bottom;
                         }
                     }
                 }
@@ -1424,12 +1623,14 @@ export component MainWindow inherits Window {
                             Rectangle { width: 10px; }
                             Text { text: "Zoom"; color: Theme.muted; font-size: 12px; vertical-alignment: center; }
                             ToggleChip {
-                                text: "−";
+                                has-icon: true;
+                                icon: @image-url("../assets/lucide/zoom-out.svg");
                                 width: 32px;
                                 clicked => { timeline.zoom(0.66, timeline-scroll.visible-width / 2); }
                             }
                             ToggleChip {
-                                text: "+";
+                                has-icon: true;
+                                icon: @image-url("../assets/lucide/zoom-in.svg");
                                 width: 32px;
                                 clicked => { timeline.zoom(1.5, timeline-scroll.visible-width / 2); }
                             }
@@ -1483,6 +1684,12 @@ export component MainWindow inherits Window {
                             }
                         }
                         Rectangle { y: parent.height - 1px; height: 1px; background: Theme.border; }
+                        Rectangle {
+                            width: root.timeline-name-width;
+                            height: parent.height;
+                            background: Theme.menu;
+                            Rectangle { x: parent.width - 1px; width: 1px; height: parent.height; background: Theme.border; }
+                        }
                     }
 
                     timeline-scroll := ScrollView {
@@ -1573,23 +1780,38 @@ export component MainWindow inherits Window {
                                     }
                                 }
 
-                                if root.timeline-hover-id == lane.id : Rectangle {
-                                    x: 8px - timeline-scroll.content-x;
-                                    y: 4px;
-                                    width: hover-name.preferred-width + 16px;
-                                    height: parent.height - 8px;
-                                    background: Theme.menu;
-                                    border-width: 1px;
-                                    border-color: Theme.border;
-                                    border-radius: 4px;
-                                    hover-name := Text {
-                                        x: 8px;
+                                Rectangle {
+                                    x: -timeline-scroll.content-x;
+                                    width: root.timeline-name-width;
+                                    height: parent.height - 1px;
+                                    background: root.selected-job-id == lane.id ? Theme.selected : mod(index, 2) == 0 ? Theme.surface : Theme.row-alt;
+                                    Rectangle { x: parent.width - 1px; width: 1px; background: Theme.border; }
+                                    Rectangle {
+                                        x: 10px;
+                                        y: (parent.height - self.height) / 2;
+                                        width: 8px;
+                                        height: 8px;
+                                        border-radius: 4px;
+                                        background: JobColors.tint(lane.status);
+                                    }
+                                    Text {
+                                        x: 26px;
+                                        width: parent.width - 34px;
+                                        height: parent.height;
                                         text: lane.name;
                                         color: Theme.text;
                                         font-size: 12px;
-                                        font-weight: 600;
                                         vertical-alignment: center;
-                                        height: parent.height;
+                                        overflow: elide;
+                                    }
+                                    TouchArea {
+                                        clicked => {
+                                            root.selected-job-id = lane.id;
+                                            root.selected-job-name = lane.name;
+                                            root.selected-job-status = lane.status;
+                                            root.selected-job-step = lane.current-step;
+                                            root.job-selected(lane.id, lane.name, lane.status);
+                                        }
                                     }
                                 }
                             }
@@ -1633,7 +1855,10 @@ export component MainWindow inherits Window {
             }
 
             if !root.history-collapsed : Rectangle {
+                x: history-panel.x - 16px;
+                y: 0px;
                 width: 16px;
+                height: parent.height - 12px;
                 background: history-resize.has-hover || root.history-dragging ? Theme.selected-soft : transparent;
                 Rectangle {
                     x: 7px;
@@ -1664,8 +1889,11 @@ export component MainWindow inherits Window {
                 }
             }
 
-            Rectangle {
+            history-panel := Rectangle {
+                x: parent.width - 12px - self.width;
+                y: 0px;
                 width: root.history-collapsed ? 36px : root.history-pane-width;
+                height: parent.height - 12px;
                 background: Theme.surface;
                 border-color: Theme.border;
                 border-width: 1px;
@@ -1679,14 +1907,13 @@ export component MainWindow inherits Window {
                         mouse-cursor: pointer;
                         clicked => { root.history-collapsed = false; root.persist-requested(); }
                     }
-                    Path {
+                    LucideIcon {
                         x: (parent.width - self.width) / 2;
-                        y: 18px;
-                        width: 10px;
-                        height: 10px;
-                        stroke: expand-history.has-hover ? Theme.text : Theme.heading;
-                        stroke-width: 1.6px;
-                        commands: "M 8 1 L 3 5 L 8 9";
+                        y: 16px;
+                        width: 14px;
+                        height: 14px;
+                        source: @image-url("../assets/lucide/chevron-left.svg");
+                        tint: expand-history.has-hover ? Theme.text : Theme.heading;
                     }
                 }
 
@@ -1709,14 +1936,13 @@ export component MainWindow inherits Window {
                             height: 28px;
                             border-radius: 6px;
                             background: collapse-history.has-hover ? Theme.hover : transparent;
-                            Path {
-                                x: 9px;
-                                y: 9px;
-                                width: 10px;
-                                height: 10px;
-                                stroke: Theme.heading;
-                                stroke-width: 1.6px;
-                                commands: "M 2 1 L 7 5 L 2 9";
+                            LucideIcon {
+                                x: 7px;
+                                y: 7px;
+                                width: 14px;
+                                height: 14px;
+                                source: @image-url("../assets/lucide/chevron-right.svg");
+                                tint: Theme.heading;
                             }
                             collapse-history := TouchArea {
                                 mouse-cursor: pointer;
@@ -1913,12 +2139,12 @@ export component MainWindow inherits Window {
             }
         }
 
-        if root.status-menu-open : Rectangle {
+        if root.status-menu-open : status-overlay := Rectangle {
             TouchArea { clicked => { root.status-menu-open = false; } }
 
             Rectangle {
-                x: root.status-menu-x;
-                y: root.status-menu-y;
+                x: root.status-menu-x - status-overlay.absolute-position.x;
+                y: root.status-menu-y - status-overlay.absolute-position.y;
                 width: 170px;
                 height: 8 * 28px + 12px;
                 background: Theme.menu;
@@ -1954,12 +2180,12 @@ export component MainWindow inherits Window {
             }
         }
 
-        if root.category-menu-open : Rectangle {
+        if root.category-menu-open : category-overlay := Rectangle {
         TouchArea { clicked => { root.category-menu-open = false; } }
 
         Rectangle {
-            x: root.category-menu-x;
-            y: root.category-menu-y;
+            x: root.category-menu-x - category-overlay.absolute-position.x;
+            y: root.category-menu-y - category-overlay.absolute-position.y;
             width: 280px;
             height: min(340px, 52px + root.categories.length * 28px);
             background: Theme.menu;
@@ -1990,19 +2216,25 @@ export component MainWindow inherits Window {
         }
         }
 
-        if root.job-menu-open : Rectangle {
+        if root.job-menu-open : job-overlay := Rectangle {
             TouchArea {
                 clicked => {
                     root.job-menu-open = false;
                     root.steps-menu-open = false;
                 }
+                pointer-event(event) => {
+                    if event.button == PointerEventButton.right && event.kind == PointerEventKind.down {
+                        root.job-menu-open = false;
+                        root.steps-menu-open = false;
+                    }
+                }
             }
 
             Rectangle {
-                x: root.job-popup-x;
-                y: root.job-popup-y;
+                x: root.job-popup-x - job-overlay.absolute-position.x;
+                y: root.job-popup-y - job-overlay.absolute-position.y;
                 width: root.job-menu-width;
-                height: 180px;
+                height: root.job-menu-height;
                 background: Theme.menu;
                 border-color: Theme.border-strong;
                 border-width: 1px;
@@ -2061,8 +2293,8 @@ export component MainWindow inherits Window {
 
             if root.steps-menu-open : Rectangle {
                 property <bool> flip: root.job-popup-x + root.job-menu-width + 272px > root.width;
-                x: max(8px, self.flip ? root.job-popup-x - 272px : root.job-popup-x + root.job-menu-width - 8px);
-                y: min(max(8px, root.job-popup-y), root.height - self.height - 8px);
+                x: max(8px, self.flip ? root.job-popup-x - 272px : root.job-popup-x + root.job-menu-width - 8px) - job-overlay.absolute-position.x;
+                y: min(max(8px, root.job-popup-y), root.height - self.height - 8px) - job-overlay.absolute-position.y;
                 width: 280px;
                 height: min(320px, 12px + max(root.job-steps.length, 1) * 30px);
                 background: Theme.menu;
@@ -2097,6 +2329,42 @@ export component MainWindow inherits Window {
                     }
                 }
             }
+        }
+    }
+
+    if root.time-tip-open : Rectangle {
+        x: min(max(8px, root.time-tip-x), root.width - self.width - 8px);
+        y: min(root.time-tip-y, root.height - self.height - 8px);
+        width: time-tip-label.preferred-width + 16px;
+        height: time-tip-label.preferred-height + 10px;
+        background: Theme.menu;
+        border-color: Theme.border-strong;
+        border-width: 1px;
+        border-radius: 4px;
+        time-tip-label := Text {
+            x: 8px;
+            y: 5px;
+            text: root.time-tip-text;
+            color: Theme.text;
+            font-size: 12px;
+        }
+    }
+
+    if root.updated-tip-open : Rectangle {
+        x: min(max(8px, root.updated-tip-x - self.width), root.width - self.width - 8px);
+        y: min(root.updated-tip-y, root.height - self.height - 8px);
+        width: ago-text.preferred-width + 16px;
+        height: ago-text.preferred-height + 10px;
+        background: Theme.menu;
+        border-color: Theme.border-strong;
+        border-width: 1px;
+        border-radius: 4px;
+        ago-text := Text {
+            x: 8px;
+            y: 5px;
+            text: root.refreshed-ago;
+            color: Theme.text;
+            font-size: 12px;
         }
     }
 

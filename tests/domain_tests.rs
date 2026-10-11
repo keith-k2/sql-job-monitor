@@ -1,7 +1,8 @@
 use sql_job_monitor::domain::{
     category_summary, command_availability, filter_and_sort, format_duration, format_step_progress,
-    format_timestamp, group_runs, include_active_run, sql_agent_duration, status_counts, ActiveRun,
-    HistoryEntry, HistoryRun, Job, JobStatus, SortColumn,
+    format_timestamp, group_runs, include_active_run, last_ran, local_epoch, next_run_in,
+    relative_update, sql_agent_duration, status_counts, ActiveRun, HistoryEntry, HistoryRun, Job,
+    JobStatus, SortColumn,
 };
 
 fn entry(step_id: i32, run_at: &str, outcome: &str, duration_seconds: u32) -> HistoryEntry {
@@ -66,6 +67,24 @@ fn job(name: &str, status: JobStatus, owner: &str, category: &str) -> Job {
         category: category.to_owned(),
         ..Job::default()
     }
+}
+
+#[test]
+fn describes_last_and_next_run_times() {
+    assert_eq!(last_ran(180), "Last ran 3 min ago");
+    assert_eq!(last_ran(8), "Last ran 8 seconds ago");
+    assert_eq!(next_run_in(300), "Next run in 5 min");
+    assert_eq!(next_run_in(-180), "Next run was due 3 min ago");
+    assert_eq!(local_epoch(""), 0);
+}
+
+#[test]
+fn describes_how_long_ago_the_list_was_updated() {
+    assert_eq!(relative_update(2), "Updated just now");
+    assert_eq!(relative_update(8), "Updated 8 seconds ago");
+    assert_eq!(relative_update(60), "Updated 1 min ago");
+    assert_eq!(relative_update(180), "Updated 3 min ago");
+    assert_eq!(relative_update(7200), "Updated 2 hours ago");
 }
 
 #[test]
