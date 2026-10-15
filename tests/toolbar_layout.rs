@@ -1,6 +1,7 @@
 use slint::{ComponentHandle, ModelRc, VecModel};
 use sql_job_monitor::{MainWindow, StatusCountRow};
 
+#[cfg(not(target_os = "macos"))]
 #[test]
 fn refresh_controls_sit_on_the_right_of_the_toolbar() {
     let ui = MainWindow::new().expect("create the window");

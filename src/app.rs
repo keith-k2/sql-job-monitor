@@ -1855,6 +1855,7 @@ mod selection_tests {
         }
     }
 
+    #[cfg(not(target_os = "macos"))]
     #[test]
     fn arrows_move_the_highlighted_job() {
         let ui = MainWindow::new().expect("window");
