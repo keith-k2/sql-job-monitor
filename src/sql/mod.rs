@@ -44,6 +44,24 @@ pub enum MonitorError {
 }
 
 pub async fn connect(options: &ConnectionOptions) -> Result<SharedClient, MonitorError> {
+    match connect_once(options, options.trust_server_certificate).await {
+        Ok(client) => Ok(client),
+        Err(error)
+            if !options.trust_server_certificate && is_tls_validation_error(&error.to_string()) =>
+        {
+            // SQL Server 2012 (and most on-prem Agent hosts) present a self-signed
+            // certificate that macOS and current TLS stacks reject. The login is
+            // still encrypted; only the identity check is skipped on retry.
+            connect_once(options, true).await
+        }
+        Err(error) => Err(error),
+    }
+}
+
+async fn connect_once(
+    options: &ConnectionOptions,
+    trust_server_certificate: bool,
+) -> Result<SharedClient, MonitorError> {
     if options.server.trim().is_empty() {
         return Err(MonitorError::MissingServer);
     }
@@ -56,13 +74,23 @@ pub async fn connect(options: &ConnectionOptions) -> Result<SharedClient, Monito
     } else {
         options.database.trim()
     });
+    // Keep the TDS session encrypted. SQL Server 2012 speaks TLS 1.2 after the
+    // later service packs; the typical failure is the self-signed cert, not the
+    // cipher itself.
     config.encryption(EncryptionLevel::Required);
-    if options.trust_server_certificate {
+    if trust_server_certificate {
         config.trust_cert();
     }
 
     match &options.authentication {
+        #[cfg(windows)]
         Authentication::Integrated => config.authentication(AuthMethod::Integrated),
+        #[cfg(not(windows))]
+        Authentication::Integrated => {
+            return Err(MonitorError::Sql(
+                "Windows authentication is available on Windows only. Use a SQL login.".to_owned(),
+            ))
+        }
         Authentication::SqlServer { username, password } => {
             config.authentication(AuthMethod::sql_server(username, password.as_str()))
         }
@@ -552,6 +580,31 @@ fn classify_message(message: &str) -> MonitorError {
     MonitorError::Sql(format!("{friendly} Details: {}", sanitize(message)))
 }
 
+fn is_tls_validation_error(message: &str) -> bool {
+    let lower = message.to_lowercase();
+    [
+        "certificate",
+        "cert verify",
+        "unknown ca",
+        "self signed",
+        "self-signed",
+        "hostname mismatch",
+        "cn name",
+        "tls handshake",
+        "ssl handshake",
+        "osstatus",
+        "securetransport",
+        "errssl",
+        "x509",
+        "pkix",
+        "untrusted",
+        "expired certificate",
+        "sha1",
+    ]
+    .iter()
+    .any(|marker| lower.contains(marker))
+}
+
 fn sanitize(message: &str) -> String {
     let compact = message.replace(['\r', '\n'], " ");
     compact.chars().take(600).collect()
@@ -573,5 +626,16 @@ mod tests {
     #[test]
     fn sanitizes_multiline_errors() {
         assert_eq!(sanitize("first\r\nsecond"), "first  second");
+    }
+
+    #[test]
+    fn treats_sql_server_certificate_failures_as_tls_validation() {
+        assert!(is_tls_validation_error(
+            "TLS handshake failed: self signed certificate"
+        ));
+        assert!(is_tls_validation_error(
+            "SecureTransport error: unknown CA / hostname mismatch"
+        ));
+        assert!(!is_tls_validation_error("Login failed for user 'reader'"));
     }
 }

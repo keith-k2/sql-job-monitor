@@ -38,10 +38,7 @@ impl SavedConnection {
 }
 
 pub fn connections_path() -> PathBuf {
-    let base = std::env::var_os("APPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."));
-    base.join("SQL Job Monitor").join("connections.json")
+    crate::platform::app_data_dir().join("connections.json")
 }
 
 pub fn load() -> Vec<SavedConnection> {

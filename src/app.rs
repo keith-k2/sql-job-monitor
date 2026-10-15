@@ -6,6 +6,7 @@ use crate::{
         timeline::{build_timeline, TimelineHistory, TimelineLane},
         ActiveRun, HistoryRun, Job, SortColumn,
     },
+    platform,
     saved::{self, SavedConnection},
     settings::{self, UiSettings},
     sql::{self, Authentication, ConnectionOptions, SharedClient},
@@ -80,7 +81,7 @@ fn handle_shortcut(
 
     match event {
         WindowEvent::ModifiersChanged(modifiers) => {
-            control_held.set(modifiers.state().control_key());
+            control_held.set(modifiers.state().control_key() || modifiers.state().super_key());
             false
         }
         WindowEvent::KeyboardInput {
@@ -242,41 +243,6 @@ fn move_job_selection(ui: &MainWindow, delta: i32) {
     ui.set_selection_scroll_tick(ui.get_selection_scroll_tick().wrapping_add(1));
 }
 
-fn open_in_browser(url: &str) {
-    use std::os::windows::ffi::OsStrExt;
-    let operation: Vec<u16> = std::ffi::OsStr::new("open")
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect();
-    let file: Vec<u16> = std::ffi::OsStr::new(url)
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect();
-    // ShellExecuteW hands the URL to the default browser and never creates a console.
-    let _ = unsafe {
-        ShellExecuteW(
-            std::ptr::null_mut(),
-            operation.as_ptr(),
-            file.as_ptr(),
-            std::ptr::null(),
-            std::ptr::null(),
-            1,
-        )
-    };
-}
-
-#[link(name = "shell32")]
-extern "system" {
-    fn ShellExecuteW(
-        hwnd: *mut core::ffi::c_void,
-        operation: *const u16,
-        file: *const u16,
-        parameters: *const u16,
-        directory: *const u16,
-        show: i32,
-    ) -> isize;
-}
-
 fn refreshed_ago(epoch: i32) -> String {
     if epoch <= 0 {
         return "Not updated yet".to_owned();
@@ -301,26 +267,36 @@ fn schedule_phrase(kind: &str, epoch: i32) -> String {
 }
 
 fn apply_dark_title(window: &slint::winit_030::winit::window::Window) -> bool {
-    use slint::winit_030::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
-
-    let Ok(handle) = window.window_handle() else {
-        return false;
-    };
-    let RawWindowHandle::Win32(win32) = handle.as_raw() else {
-        return false;
-    };
-    let hwnd = win32.hwnd.get();
-    unsafe {
-        // 19 is the Windows 10 value; 20 is the current dark-mode attribute.
-        set_caption_attribute(hwnd, 19, 1);
-        set_caption_attribute(hwnd, 20, 1);
-        set_caption_attribute(hwnd, 35, color_ref(0x10, 0x15, 0x1D));
-        set_caption_attribute(hwnd, 34, color_ref(0x2A, 0x39, 0x4B));
-        set_caption_attribute(hwnd, 36, color_ref(0xE9, 0xEE, 0xF5));
+    #[cfg(not(windows))]
+    {
+        let _ = window;
+        return true;
     }
-    true
+
+    #[cfg(windows)]
+    {
+        use slint::winit_030::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+
+        let Ok(handle) = window.window_handle() else {
+            return false;
+        };
+        let RawWindowHandle::Win32(win32) = handle.as_raw() else {
+            return true;
+        };
+        let hwnd = win32.hwnd.get();
+        unsafe {
+            // 19 is the Windows 10 value; 20 is the current dark-mode attribute.
+            set_caption_attribute(hwnd, 19, 1);
+            set_caption_attribute(hwnd, 20, 1);
+            set_caption_attribute(hwnd, 35, color_ref(0x10, 0x15, 0x1D));
+            set_caption_attribute(hwnd, 34, color_ref(0x2A, 0x39, 0x4B));
+            set_caption_attribute(hwnd, 36, color_ref(0xE9, 0xEE, 0xF5));
+        }
+        true
+    }
 }
 
+#[cfg(windows)]
 fn color_ref(red: u32, green: u32, blue: u32) -> u32 {
     red | (green << 8) | (blue << 16)
 }
@@ -374,6 +350,29 @@ struct WorkArea {
 }
 
 fn monitor_work_area(window: &slint::winit_030::winit::window::Window) -> Option<WorkArea> {
+    #[cfg(windows)]
+    {
+        if let Some(area) = win32_work_area(window) {
+            return Some(area);
+        }
+    }
+    let monitor = window.current_monitor()?;
+    let position = monitor.position();
+    let size = monitor.size();
+    Some(WorkArea {
+        left: position.x,
+        top: position.y,
+        right: position
+            .x
+            .saturating_add(i32::try_from(size.width).unwrap_or(i32::MAX)),
+        bottom: position
+            .y
+            .saturating_add(i32::try_from(size.height).unwrap_or(i32::MAX)),
+    })
+}
+
+#[cfg(windows)]
+fn win32_work_area(window: &slint::winit_030::winit::window::Window) -> Option<WorkArea> {
     use slint::winit_030::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
     let handle = window.window_handle().ok()?;
@@ -383,6 +382,7 @@ fn monitor_work_area(window: &slint::winit_030::winit::window::Window) -> Option
     unsafe { work_area_from_hwnd(win32.hwnd.get()) }
 }
 
+#[cfg(windows)]
 unsafe fn work_area_from_hwnd(hwnd: isize) -> Option<WorkArea> {
     #[repr(C)]
     struct WinRect {
@@ -437,6 +437,7 @@ unsafe fn work_area_from_hwnd(hwnd: isize) -> Option<WorkArea> {
     }
 }
 
+#[cfg(windows)]
 unsafe fn set_caption_attribute(hwnd: isize, attribute: u32, value: u32) {
     #[link(name = "dwmapi")]
     unsafe extern "system" {
@@ -524,7 +525,15 @@ impl Application {
         self.state.lock().expect("state poisoned").timeline_days =
             u32::try_from(settings.timeline_days).unwrap_or(0);
         publish_saved(&self.ui);
+        self.ui
+            .set_windows_auth_available(platform::windows_auth_available());
+        if !platform::windows_auth_available() {
+            self.ui.set_form_windows_auth(false);
+        }
         fill_saved_form(&self.ui, &settings.last_connection_id);
+        if !platform::windows_auth_available() {
+            self.ui.set_form_windows_auth(false);
+        }
         self.install_callbacks();
         if !settings.last_connection_id.is_empty() {
             self.ui
@@ -565,7 +574,7 @@ impl Application {
         self.install_grid_callbacks();
         self.install_command_callbacks();
         self.ui.on_open_coffee_requested(|| {
-            open_in_browser("https://buymeacoffee.com/keithr");
+            platform::open_in_browser("https://buymeacoffee.com/keithr");
         });
 
         let ui_weak = self.ui.as_weak();
@@ -1141,6 +1150,13 @@ fn connection_options(
             }
         }
     };
+    if windows_auth && !platform::windows_auth_available() {
+        set_error(
+            ui_weak,
+            "Windows authentication is available on Windows only. Use a SQL login.",
+        );
+        return None;
+    }
     Some(ConnectionOptions {
         server: server.to_string(),
         port,

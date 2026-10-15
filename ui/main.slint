@@ -893,7 +893,8 @@ export component MainWindow inherits Window {
     in-out property <string> form-port: "";
     in-out property <string> form-username: "";
     in-out property <bool> form-windows-auth: true;
-    in-out property <bool> form-trust-certificate: false;
+    in-out property <bool> windows-auth-available: true;
+    in-out property <bool> form-trust-certificate: true;
     in-out property <bool> pinned: false;
     in-out property <int> search-focus-tick: 0;
 
@@ -1066,30 +1067,30 @@ export component MainWindow inherits Window {
                     }
                 }
 
-                windows-auth := CheckBox {
+                if root.windows-auth-available : CheckBox {
                     text: "Use my current Windows account";
                     checked: root.form-windows-auth;
                     toggled => { root.form-windows-auth = self.checked; }
                 }
 
                 credentials := VerticalLayout {
-                    opacity: windows-auth.checked ? 0.45 : 1;
+                    opacity: root.form-windows-auth && root.windows-auth-available ? 0.45 : 1;
                     spacing: 4px;
                     Text { text: "SQL login"; color: Theme.label; font-size: 12px; }
                     username-input := LineEdit {
                         placeholder-text: "Username";
-                        enabled: !windows-auth.checked;
+                        enabled: !(root.form-windows-auth && root.windows-auth-available);
                         text <=> root.form-username;
                     }
                     password-input := LineEdit {
                         placeholder-text: "Password";
                         input-type: password;
-                        enabled: !windows-auth.checked;
+                        enabled: !(root.form-windows-auth && root.windows-auth-available);
                     }
                 }
 
                 trust-cert := CheckBox {
-                    text: "Trust server certificate (reduces TLS security)";
+                    text: "Trust server certificate (required for most SQL Server 2012 hosts)";
                     checked: root.form-trust-certificate;
                     toggled => { root.form-trust-certificate = self.checked; }
                 }
@@ -1124,7 +1125,7 @@ export component MainWindow inherits Window {
                             port-input.text,
                             username-input.text,
                             password-input.text,
-                            windows-auth.checked,
+                            root.form-windows-auth && root.windows-auth-available,
                             trust-cert.checked,
                             remember-connection.checked
                         );

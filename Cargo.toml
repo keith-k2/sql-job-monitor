@@ -2,7 +2,7 @@
 name = "sql-job-monitor"
 version = "0.1.0"
 edition = "2021"
-description = "A fast native Windows monitor for SQL Server Agent jobs"
+description = "A native desktop monitor for SQL Server Agent jobs on Windows and macOS"
 authors = ["SQL Job Monitor Contributors"]
 license = "MIT"
 build = "build.rs"
@@ -15,11 +15,14 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 slint = { version = "1.13", features = ["unstable-winit-030"] }
 thiserror = "2.0"
-tiberius = { version = "0.13", features = ["chrono", "native-tls", "sql-browser-tokio", "winauth"] }
+tiberius = { version = "0.13", default-features = false, features = ["chrono", "native-tls", "sql-browser-tokio", "tds73"] }
 tokio = { version = "1.47", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
 tokio-util = { version = "0.7", features = ["compat", "rt"] }
 uuid = { version = "1.18", features = ["v4"] }
 zeroize = { version = "1.8", features = ["derive"] }
+
+[target.'cfg(windows)'.dependencies]
+tiberius = { version = "0.13", default-features = false, features = ["chrono", "native-tls", "sql-browser-tokio", "tds73", "winauth"] }
 
 [build-dependencies]
 slint-build = "1.13"

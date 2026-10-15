@@ -1,14 +1,12 @@
 # SQL Job Monitor
 
-A native Windows desktop app for watching and controlling SQL Server Agent jobs. Connect once, then monitor activity, inspect history, and start or stop jobs without opening SQL Server Management Studio.
+A native desktop app for watching and controlling SQL Server Agent jobs on **Windows** and **macOS**. Connect once, then monitor activity, inspect history, and start or stop jobs without opening SQL Server Management Studio.
 
-**[Download the Windows installer](https://github.com/keith-k2/sql-job-monitor/releases/latest)**
-
-Windows 10 or later. The installer adds SQL Job Monitor to the Start menu.
+**[Download the latest installer](https://github.com/keith-k2/sql-job-monitor/releases/latest)**
 
 ## What it does
 
-- Connect with the current Windows account or a SQL Server login, including named instances.
+- Connect with a SQL Server login, including named instances. On Windows, the current Windows account is also available.
 - See every job’s status, enabled state, current step, last run, duration, next run, owner, and category.
 - Filter by status, search, sort, and resize columns. Running jobs stay pinned at the top.
 - Open recent history and the steps inside each run.
@@ -21,12 +19,23 @@ SQL Server Agent is not available in SQL Server Express. Azure Elastic Jobs are 
 
 ## Install
 
+### Windows
+
 1. Open the [latest release](https://github.com/keith-k2/sql-job-monitor/releases/latest).
 2. Download `sql-job-monitor-0.1.0-x86_64.msi`.
 3. Run the installer. Windows asks for administrator approval because the app is installed for all users on the computer.
 4. Launch **SQL Job Monitor** from the Start menu.
 
 To remove it, use **Apps** in Windows Settings.
+
+### macOS
+
+1. Open the [latest release](https://github.com/keith-k2/sql-job-monitor/releases/latest).
+2. Download `sql-job-monitor-0.1.0-macos.dmg`. The disk image is a universal binary for Apple silicon and Intel.
+3. Open the disk image and drag **SQL Job Monitor** into Applications.
+4. The first launch of an unsigned build needs a right-click on the app, then **Open**.
+
+macOS 11 or later. Use a SQL login; Windows integrated authentication is a Windows-only feature.
 
 ## Connect
 
@@ -38,11 +47,15 @@ The login needs permission to read SQL Server Agent metadata in `msdb`.
 
 SQL Server must accept TCP/IP connections. A named instance also needs SQL Server Browser and UDP 1434, unless you enter its fixed port.
 
-Certificate validation stays on unless **Trust server certificate** is checked for that connection. Use that override only for a server whose certificate cannot be validated.
+The connection is always encrypted. SQL Server 2012 and most on-prem Agent hosts present a self-signed certificate, which macOS and current TLS stacks reject during identity checks. **Trust server certificate** is on by default so that handshake succeeds; the password and queries still travel over TLS. Uncheck it only when the server has a certificate issued by a CA that the computer already trusts.
+
+SQL Server 2012 needs a later service pack or cumulative update that enables TLS 1.2 (SP2 CU or newer). Without that update, modern clients cannot complete the encrypted login.
 
 ## Build from source
 
-Install the current stable Rust toolchain from [rustup](https://rustup.rs/), then:
+Install the current stable Rust toolchain from [rustup](https://rustup.rs/).
+
+Windows:
 
 ```powershell
 cargo run --release
@@ -50,9 +63,24 @@ cargo run --release
 
 The executable is written to `target\release\sql-job-monitor.exe`.
 
+macOS:
+
+```bash
+cargo run --release
+```
+
+The executable is written to `target/release/sql-job-monitor`. Package a drag-install disk image with:
+
+```bash
+chmod +x scripts/package-macos.sh
+scripts/package-macos.sh
+```
+
+`target/macos/sql-job-monitor-0.1.0-macos.dmg` is the installer.
+
 Checks:
 
-```powershell
+```
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
@@ -60,14 +88,14 @@ cargo test
 
 Live SQL tests stay ignored unless a server is provided:
 
-```powershell
-$env:SQL_JOB_MONITOR_TEST_SERVER = 'SERVER\INSTANCE'
+```
+SQL_JOB_MONITOR_TEST_SERVER=SERVER\INSTANCE
 cargo test --test sql_integration -- --ignored
 ```
 
-For a SQL login, also set `SQL_JOB_MONITOR_TEST_USER` and `SQL_JOB_MONITOR_TEST_PASSWORD`. Set `SQL_JOB_MONITOR_TEST_PORT` for a fixed port, or `SQL_JOB_MONITOR_TEST_TRUST_CERT=1` only for a development server.
+For a SQL login, also set `SQL_JOB_MONITOR_TEST_USER` and `SQL_JOB_MONITOR_TEST_PASSWORD`. Set `SQL_JOB_MONITOR_TEST_PORT` for a fixed port. Certificate identity checks are retried automatically when SQL Server 2012 presents its default self-signed certificate.
 
-### Installer
+### Windows MSI
 
 The MSI is built with [cargo-wix](https://github.com/volks73/cargo-wix) and WiX Toolset 3.14:
 
@@ -81,9 +109,9 @@ cargo wix --bin-path C:\path\to\wix314
 ## Security
 
 - A connection is saved only after a successful login when **Remember this connection** is checked.
-- Server settings are stored in `%APPDATA%\SQL Job Monitor\connections.json`. SQL passwords go to Windows Credential Manager for the current Windows user, not into that file.
+- Server settings are stored in `%APPDATA%\SQL Job Monitor\connections.json` on Windows, or `~/Library/Application Support/SQL Job Monitor/connections.json` on macOS. SQL passwords go to the OS credential store for the current user, not into that file.
 - Passwords and connection strings are not written to logs.
-- Connections use TLS. Trusting the server certificate is an explicit, per-connection choice.
+- Connections use TLS. Trusting the server certificate skips identity checks and is the usual setting for SQL Server 2012.
 - Queries time out, and a newer refresh replaces an older result that arrives late.
 
 ## License

@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  MACOSX_DEPLOYMENT_TARGET: "11.0"
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test
+        run: cargo test
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - name: Test
+        run: cargo test
+      - name: Build universal binary
+        run: |
+          cargo build --release --target aarch64-apple-darwin
+          cargo build --release --target x86_64-apple-darwin
+          mkdir -p target/release
+          lipo -create -output target/release/sql-job-monitor \
+            target/aarch64-apple-darwin/release/sql-job-monitor \
+            target/x86_64-apple-darwin/release/sql-job-monitor
+          chmod +x scripts/package-macos.sh
+          scripts/package-macos.sh --binary target/release/sql-job-monitor --version 0.1.0
+      - name: Upload macOS installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: sql-job-monitor-macos
+          path: target/macos/sql-job-monitor-0.1.0-macos.dmg
+      - name: Attach to GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${GITHUB_REF_NAME}" target/macos/sql-job-monitor-0.1.0-macos.dmg --clobber
+      - name: Attach to latest published release
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload v0.1.0 target/macos/sql-job-monitor-0.1.0-macos.dmg --clobber
