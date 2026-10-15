@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=SQL Job Monitor
+Comment=Monitor and control SQL Server Agent jobs
+Exec=sql-job-monitor
+Icon=sql-job-monitor
+Terminal=false
+Categories=Development;Database;Utility;
+StartupNotify=true

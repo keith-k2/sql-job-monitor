@@ -21,6 +21,25 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Test
         run: cargo test
+      - name: Package
+        shell: pwsh
+        run: |
+          if (Get-Command cargo-wix -ErrorAction SilentlyContinue) {
+            ./scripts/package-windows.ps1
+          } else {
+            cargo build --release
+          }
+      - name: Upload Windows installer
+        if: hashFiles('dist/*.msi') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: sql-job-monitor-windows
+          path: dist/*.msi
+      - name: Attach to GitHub release
+        if: startsWith(github.ref, 'refs/tags/') && hashFiles('dist/*.msi') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.ref_name }}" dist/*.msi --clobber
 
   macos:
     runs-on: macos-latest
@@ -33,26 +52,63 @@ jobs:
         run: cargo test
       - name: Build universal binary
         run: |
+          chmod +x scripts/read-version.sh scripts/package-macos.sh
+          version="$(scripts/read-version.sh)"
           cargo build --release --target aarch64-apple-darwin
           cargo build --release --target x86_64-apple-darwin
           mkdir -p target/release
           lipo -create -output target/release/sql-job-monitor \
             target/aarch64-apple-darwin/release/sql-job-monitor \
             target/x86_64-apple-darwin/release/sql-job-monitor
-          chmod +x scripts/package-macos.sh
-          scripts/package-macos.sh --binary target/release/sql-job-monitor --version 0.1.0
+          scripts/package-macos.sh --binary target/release/sql-job-monitor --version "$version"
       - name: Upload macOS installer
         uses: actions/upload-artifact@v4
         with:
           name: sql-job-monitor-macos
-          path: target/macos/sql-job-monitor-0.1.0-macos.dmg
+          path: dist/*.dmg
       - name: Attach to GitHub release
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${GITHUB_REF_NAME}" target/macos/sql-job-monitor-0.1.0-macos.dmg --clobber
-      - name: Attach to latest published release
-        if: github.event_name == 'workflow_dispatch'
+        run: gh release upload "${{ github.ref_name }}" dist/*.dmg --clobber
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install GUI libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxkbcommon-dev libgtk-3-dev pkg-config
+      - name: Test
+        run: cargo test
+      - name: Build
+        run: cargo build --release
+      - name: Fetch appimagetool
+        run: |
+          mkdir -p target/linux/tools
+          curl -L --fail -o target/linux/tools/appimagetool.AppImage \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x target/linux/tools/appimagetool.AppImage
+          cd target/linux/tools
+          ./appimagetool.AppImage --appimage-extract
+          ln -sf squashfs-root/AppRun appimagetool
+      - name: Package
+        run: |
+          chmod +x scripts/read-version.sh scripts/package-linux.sh packaging/linux/AppRun
+          scripts/package-linux.sh
+      - name: Upload Linux installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: sql-job-monitor-linux
+          path: |
+            dist/*.AppImage
+            dist/*.tar.gz
+      - name: Attach to GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload v0.1.0 target/macos/sql-job-monitor-0.1.0-macos.dmg --clobber
+        run: gh release upload "${{ github.ref_name }}" dist/*.AppImage dist/*.tar.gz --clobber

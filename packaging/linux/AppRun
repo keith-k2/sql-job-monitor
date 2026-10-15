@@ -1,0 +1,11 @@
+#!/bin/sh
+# Shared launcher for the AppImage and the portable tree.
+HERE="$(dirname "$(readlink -f "$0")")"
+if [ -x "$HERE/usr/bin/sql-job-monitor" ]; then
+    exec "$HERE/usr/bin/sql-job-monitor" "$@"
+fi
+if [ -x "$HERE/sql-job-monitor" ]; then
+    exec "$HERE/sql-job-monitor" "$@"
+fi
+echo "sql-job-monitor is missing from this package." >&2
+exit 1

@@ -4,16 +4,16 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
-version="${VERSION:-0.1.0}"
+version="${VERSION:-$("$root/scripts/read-version.sh")}"
 binary="${BINARY:-$root/target/release/sql-job-monitor}"
 stage="$root/target/macos"
 app="$stage/SQL Job Monitor.app"
-dmg="$root/target/macos/sql-job-monitor-${version}-macos.dmg"
+dmg="$root/dist/sql-job-monitor-${version}-macos.dmg"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --binary) binary="$2"; shift 2 ;;
-    --version) version="$2"; dmg="$root/target/macos/sql-job-monitor-${version}-macos.dmg"; shift 2 ;;
+    --version) version="$2"; dmg="$root/dist/sql-job-monitor-${version}-macos.dmg"; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 1 ;;
   esac
 done
@@ -37,7 +37,8 @@ done
 iconutil -c icns "$iconset" -o "$app/Contents/Resources/app.icns"
 rm -rf "$iconset"
 
-sed "s/0.1.0/${version}/g" "$root/packaging/macos/Info.plist" > "$app/Contents/Info.plist"
+mkdir -p "$root/dist"
+sed "s/__VERSION__/${version}/g" "$root/packaging/macos/Info.plist" > "$app/Contents/Info.plist"
 cp "$binary" "$app/Contents/MacOS/sql-job-monitor"
 chmod +x "$app/Contents/MacOS/sql-job-monitor"
 

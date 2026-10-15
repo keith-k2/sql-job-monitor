@@ -17,6 +17,7 @@ pub fn app_data_dir() -> PathBuf {
             .map(PathBuf::from)
             .unwrap_or_else(|| home_dir().join(".config"))
             .join("sql-job-monitor")
+        // Secret Service (GNOME Keyring / KWallet) stores the SQL password.
     }
 }
 

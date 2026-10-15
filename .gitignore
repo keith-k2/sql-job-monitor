@@ -1,6 +1,8 @@
 /target/
+/dist/
 *.msi
 *.dmg
+*.AppImage
 *.wixobj
 *.wixpdb
 .env
