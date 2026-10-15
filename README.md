@@ -47,7 +47,9 @@ The login needs permission to read SQL Server Agent metadata in `msdb`.
 
 SQL Server must accept TCP/IP connections. A named instance also needs SQL Server Browser and UDP 1434, unless you enter its fixed port.
 
-The connection is always encrypted. SQL Server 2012 and most on-prem Agent hosts present a self-signed certificate, which macOS and current TLS stacks reject during identity checks. **Trust server certificate** is on by default so that handshake succeeds; the password and queries still travel over TLS. Uncheck it only when the server has a certificate issued by a CA that the computer already trusts.
+The connection is always encrypted with TLS 1.2 through rustls. macOS Secure Transport closes SQL Server's handshake, so this app does not use it.
+
+SQL Server 2012 and most on-prem Agent hosts present a self-signed certificate, which identity checks reject. **Trust server certificate** is on by default so that handshake succeeds; the password and queries still travel over TLS. If that box is unchecked and the certificate is still self-signed, the app retries once with the certificate accepted. Uncheck it only when the server has a certificate issued by a CA that the computer already trusts.
 
 SQL Server 2012 needs a later service pack or cumulative update that enables TLS 1.2 (SP2 CU or newer). Without that update, modern clients cannot complete the encrypted login.
 

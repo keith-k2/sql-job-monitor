@@ -74,9 +74,10 @@ async fn connect_once(
     } else {
         options.database.trim()
     });
-    // Keep the TDS session encrypted. SQL Server 2012 speaks TLS 1.2 after the
-    // later service packs; the typical failure is the self-signed cert, not the
-    // cipher itself.
+    // rustls (TLS 1.2+) wraps the TDS login. Secure Transport on macOS closes
+    // SQL Server's handshake, so this backend is used on every platform. SQL
+    // Server 2012 speaks TLS 1.2 after later service packs; the usual failure
+    // is the self-signed certificate, handled by trust_cert below.
     config.encryption(EncryptionLevel::Required);
     if trust_server_certificate {
         config.trust_cert();
