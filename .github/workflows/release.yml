@@ -21,25 +21,35 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Test
         run: cargo test
-      - name: Package
+      - name: Install WiX and cargo-wix
         shell: pwsh
         run: |
-          if (Get-Command cargo-wix -ErrorAction SilentlyContinue) {
-            ./scripts/package-windows.ps1
-          } else {
-            cargo build --release
-          }
+          cargo install cargo-wix --locked
+          $wix = Join-Path $env:RUNNER_TEMP "wix314"
+          New-Item -ItemType Directory -Force $wix | Out-Null
+          Invoke-WebRequest -UseBasicParsing -OutFile (Join-Path $env:RUNNER_TEMP "wix.zip") `
+            https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip
+          Expand-Archive (Join-Path $env:RUNNER_TEMP "wix.zip") $wix
+          "WIX_BIN=$wix" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Package
+        shell: pwsh
+        run: ./scripts/package-windows.ps1 -BinPath $env:WIX_BIN
       - name: Upload Windows installer
-        if: hashFiles('dist/*.msi') != ''
         uses: actions/upload-artifact@v4
         with:
           name: sql-job-monitor-windows
           path: dist/*.msi
       - name: Attach to GitHub release
-        if: startsWith(github.ref, 'refs/tags/') && hashFiles('dist/*.msi') != ''
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.ref_name }}" dist/*.msi --clobber
+        shell: pwsh
+        run: |
+          gh release view $env:GITHUB_REF_NAME 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $env:GITHUB_REF_NAME --title "SQL Job Monitor $env:GITHUB_REF_NAME" --notes "Windows, macOS, and Linux installers for this version."
+          }
+          gh release upload $env:GITHUB_REF_NAME dist/*.msi --clobber
 
   macos:
     runs-on: macos-latest
@@ -70,7 +80,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.ref_name }}" dist/*.dmg --clobber
+        run: |
+          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || gh release create "${GITHUB_REF_NAME}" --title "SQL Job Monitor ${GITHUB_REF_NAME}" --notes "Windows, macOS, and Linux installers for this version."
+          gh release upload "${GITHUB_REF_NAME}" dist/*.dmg --clobber
 
   linux:
     runs-on: ubuntu-latest
@@ -89,13 +101,14 @@ jobs:
         run: cargo build --release
       - name: Fetch appimagetool
         run: |
-          mkdir -p target/linux/tools
-          curl -L --fail -o target/linux/tools/appimagetool.AppImage \
+          mkdir -p "$RUNNER_TEMP/appimagetool"
+          curl -L --fail -o "$RUNNER_TEMP/appimagetool/appimagetool.AppImage" \
             https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
-          chmod +x target/linux/tools/appimagetool.AppImage
-          cd target/linux/tools
+          chmod +x "$RUNNER_TEMP/appimagetool/appimagetool.AppImage"
+          cd "$RUNNER_TEMP/appimagetool"
           ./appimagetool.AppImage --appimage-extract
           ln -sf squashfs-root/AppRun appimagetool
+          echo "APPIMAGETOOL=$RUNNER_TEMP/appimagetool/appimagetool" >> "$GITHUB_ENV"
       - name: Package
         run: |
           chmod +x scripts/read-version.sh scripts/package-linux.sh packaging/linux/AppRun
@@ -111,4 +124,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.ref_name }}" dist/*.AppImage dist/*.tar.gz --clobber
+        run: |
+          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || gh release create "${GITHUB_REF_NAME}" --title "SQL Job Monitor ${GITHUB_REF_NAME}" --notes "Windows, macOS, and Linux installers for this version."
+          gh release upload "${GITHUB_REF_NAME}" dist/*.AppImage dist/*.tar.gz --clobber
