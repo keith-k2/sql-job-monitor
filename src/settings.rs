@@ -25,6 +25,10 @@ pub struct UiSettings {
     #[serde(default)]
     pub last_connection_id: String,
     #[serde(default)]
+    pub selected_categories: Vec<String>,
+    #[serde(default)]
+    pub category_filter_active: bool,
+    #[serde(default)]
     pub auto_refresh: bool,
     #[serde(default = "default_refresh_seconds")]
     pub refresh_seconds: i32,
@@ -63,6 +67,8 @@ impl Default for UiSettings {
             timeline_zoom_saved: false,
             columns: default_columns(),
             last_connection_id: String::new(),
+            selected_categories: Vec::new(),
+            category_filter_active: false,
             auto_refresh: false,
             refresh_seconds: default_refresh_seconds(),
         }

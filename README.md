@@ -10,7 +10,7 @@ One codebase, one version in `Cargo.toml`. The same release commit produces ever
 
 - Connect with a SQL Server login, including named instances. On Windows, the current Windows account is also available.
 - See every job’s status, enabled state, current step, last run, duration, next run, owner, and category.
-- Filter by status, search, sort, and resize columns. Running jobs stay pinned at the top.
+- Filter by status, search, sort, and resize columns. Running jobs stay pinned at the top. Categories start unfiltered, and the categories you choose are restored the next time the app opens.
 - Open recent history and the steps inside each run.
 - Switch to a zoomable timeline that shows how long each job and step took.
 - Start a job, start it at a chosen step, stop it, or enable and disable it.

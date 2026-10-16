@@ -144,6 +144,13 @@ fn apply_settings(ui: &MainWindow, settings: &UiSettings, zoom_saved: bool) {
     columns.set_category(widths[8]);
 }
 
+fn persist_category_filter(state: &State) {
+    let mut settings = settings::load();
+    settings.selected_categories = state.selected_categories.clone();
+    settings.category_filter_active = state.category_filter_active;
+    let _ = settings::store(&settings);
+}
+
 fn persist_layout(ui: &MainWindow, last_connection_id: Option<String>) {
     let mut settings = settings::load();
     if let Some(id) = last_connection_id {
@@ -471,6 +478,7 @@ struct State {
     search: String,
     status_filter: String,
     selected_categories: Vec<String>,
+    category_filter_active: bool,
     sort_column: SortColumn,
     sort_ascending: bool,
     selected_job_id: String,
@@ -503,7 +511,6 @@ impl Application {
             runtime,
             state: Arc::new(Mutex::new(State {
                 status_filter: "All".to_owned(),
-                selected_categories: vec!["ETL".to_owned()],
                 sort_ascending: true,
                 ..State::default()
             })),
@@ -522,8 +529,19 @@ impl Application {
             u64::try_from(settings.refresh_seconds).unwrap_or(5).max(2),
             Ordering::Relaxed,
         );
-        self.state.lock().expect("state poisoned").timeline_days =
-            u32::try_from(settings.timeline_days).unwrap_or(0);
+        {
+            let mut state = self.state.lock().expect("state poisoned");
+            state.timeline_days = u32::try_from(settings.timeline_days).unwrap_or(0);
+            state.selected_categories = settings.selected_categories.clone();
+            state.category_filter_active = settings.category_filter_active;
+        }
+        self.ui.set_category_label(
+            category_filter_summary(
+                settings.category_filter_active,
+                &settings.selected_categories,
+            )
+            .into(),
+        );
         publish_saved(&self.ui);
         self.ui
             .set_windows_auth_available(platform::windows_auth_available());
@@ -777,6 +795,10 @@ impl Application {
             let (rows, choices, summary) = {
                 let mut state = state.lock().expect("state poisoned");
                 let name = name.to_string();
+                if !state.category_filter_active {
+                    state.selected_categories = category_names(&state.jobs);
+                    state.category_filter_active = true;
+                }
                 if checked {
                     if !state
                         .selected_categories
@@ -790,6 +812,10 @@ impl Application {
                         .selected_categories
                         .retain(|category| !category.eq_ignore_ascii_case(&name));
                 }
+                if selected_categories_cover_jobs(&state) {
+                    state.category_filter_active = false;
+                }
+                persist_category_filter(&state);
                 view_state(&state)
             };
             apply_view(&ui_weak, rows, choices, summary);
@@ -801,11 +827,14 @@ impl Application {
         self.ui.on_categories_set_all(move |selected| {
             let (rows, choices, summary) = {
                 let mut state = state.lock().expect("state poisoned");
-                state.selected_categories = if selected {
-                    category_names(&state.jobs)
+                if selected {
+                    state.selected_categories = category_names(&state.jobs);
+                    state.category_filter_active = false;
                 } else {
-                    Vec::new()
-                };
+                    state.selected_categories.clear();
+                    state.category_filter_active = true;
+                }
+                persist_category_filter(&state);
                 view_state(&state)
             };
             apply_view(&ui_weak, rows, choices, summary);
@@ -1386,7 +1415,9 @@ fn visible_jobs(state: &State) -> Vec<Job> {
         &state.jobs,
         &state.search,
         &state.status_filter,
-        &state.selected_categories,
+        state
+            .category_filter_active
+            .then_some(state.selected_categories.as_slice()),
         state.sort_column,
         state.sort_ascending,
     )
@@ -1396,8 +1427,27 @@ fn view_state(state: &State) -> (Vec<Job>, Vec<CategoryChoice>, String) {
     (
         visible_jobs(state),
         category_choices(state),
-        category_summary(&state.selected_categories),
+        category_filter_summary(state.category_filter_active, &state.selected_categories),
     )
+}
+
+fn category_filter_summary(active: bool, selected: &[String]) -> String {
+    if active {
+        category_summary(selected)
+    } else {
+        "All categories".to_owned()
+    }
+}
+
+fn selected_categories_cover_jobs(state: &State) -> bool {
+    let names = category_names(&state.jobs);
+    !names.is_empty()
+        && names.iter().all(|name| {
+            state
+                .selected_categories
+                .iter()
+                .any(|category| category.eq_ignore_ascii_case(name))
+        })
 }
 
 fn category_names(jobs: &[Job]) -> Vec<String> {
@@ -1408,10 +1458,6 @@ fn category_names(jobs: &[Job]) -> Vec<String> {
         .collect();
     names.sort_by_key(|name| name.to_lowercase());
     names.dedup_by(|left, right| left.eq_ignore_ascii_case(right));
-    if !names.iter().any(|name| name.eq_ignore_ascii_case("ETL")) {
-        names.push("ETL".to_owned());
-        names.sort_by_key(|name| name.to_lowercase());
-    }
     names
 }
 
@@ -1419,10 +1465,11 @@ fn category_choices(state: &State) -> Vec<CategoryChoice> {
     category_names(&state.jobs)
         .into_iter()
         .map(|name| {
-            let checked = state
-                .selected_categories
-                .iter()
-                .any(|category| category.eq_ignore_ascii_case(&name));
+            let checked = !state.category_filter_active
+                || state
+                    .selected_categories
+                    .iter()
+                    .any(|category| category.eq_ignore_ascii_case(&name));
             CategoryChoice {
                 name: name.into(),
                 checked,

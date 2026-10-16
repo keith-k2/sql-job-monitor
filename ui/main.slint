@@ -830,7 +830,7 @@ export component MainWindow inherits Window {
     in-out property <length> history-drag-origin-width: 365px;
     in-out property <[CategoryChoice]> categories;
     in-out property <bool> category-menu-open: false;
-    in-out property <bool> category-filter-active: true;
+    in-out property <bool> category-filter-active: false;
     in-out property <length> category-menu-x: 0px;
     in-out property <length> category-menu-y: 0px;
     in-out property <string> job-status-filter: "All";
@@ -887,7 +887,7 @@ export component MainWindow inherits Window {
         }
         root.steps-requested(root.jobs[row].id);
     }
-    in-out property <string> category-label: "ETL";
+    in-out property <string> category-label: "All categories";
     in-out property <[SavedConnectionRow]> saved-connections;
     in-out property <string> form-server: "";
     in-out property <string> form-port: "";

@@ -387,7 +387,7 @@ pub fn filter_and_sort(
     jobs: &[Job],
     search: &str,
     status: &str,
-    categories: &[String],
+    categories: Option<&[String]>,
     column: SortColumn,
     ascending: bool,
 ) -> Vec<Job> {
@@ -400,9 +400,11 @@ pub fn filter_and_sort(
                 || job.owner.to_lowercase().contains(&search)
                 || job.category.to_lowercase().contains(&search))
                 && (status == "All" || job.status.label() == status)
-                && categories
-                    .iter()
-                    .any(|category| category.eq_ignore_ascii_case(&job.category))
+                && categories.is_none_or(|categories| {
+                    categories
+                        .iter()
+                        .any(|category| category.eq_ignore_ascii_case(&job.category))
+                })
         })
         .cloned()
         .collect();

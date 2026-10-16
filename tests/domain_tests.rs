@@ -127,7 +127,7 @@ fn filters_searches_and_sorts_jobs() {
         &jobs,
         "dba",
         "Succeeded",
-        &categories,
+        Some(categories.as_slice()),
         SortColumn::Name,
         true,
     );
@@ -139,7 +139,14 @@ fn filters_searches_and_sorts_jobs() {
         vec!["Cleanup"]
     );
 
-    let sorted = filter_and_sort(&jobs, "", "All", &categories, SortColumn::Name, false);
+    let sorted = filter_and_sort(
+        &jobs,
+        "",
+        "All",
+        Some(categories.as_slice()),
+        SortColumn::Name,
+        false,
+    );
     assert_eq!(
         sorted
             .iter()
@@ -152,7 +159,7 @@ fn filters_searches_and_sorts_jobs() {
         &jobs,
         "",
         "All",
-        &["ETL".to_owned()],
+        Some(&["ETL".to_owned()]),
         SortColumn::Name,
         true,
     );
@@ -162,6 +169,15 @@ fn filters_searches_and_sorts_jobs() {
             .map(|job| job.name.as_str())
             .collect::<Vec<_>>(),
         vec!["Cleanup", "Warehouse Load"]
+    );
+
+    let unfiltered = filter_and_sort(&jobs, "", "All", None, SortColumn::Name, true);
+    assert_eq!(
+        unfiltered
+            .iter()
+            .map(|job| job.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Backup", "Cleanup", "Warehouse Load"]
     );
 }
 
@@ -317,7 +333,14 @@ fn pins_running_jobs_above_the_selected_sort() {
         job("Zebra", JobStatus::Failed, "dba", "ETL"),
     ];
     let categories = ["ETL".to_owned()];
-    let ascending = filter_and_sort(&jobs, "", "All", &categories, SortColumn::Name, true);
+    let ascending = filter_and_sort(
+        &jobs,
+        "",
+        "All",
+        Some(categories.as_slice()),
+        SortColumn::Name,
+        true,
+    );
     assert_eq!(
         ascending
             .iter()
@@ -325,7 +348,14 @@ fn pins_running_jobs_above_the_selected_sort() {
             .collect::<Vec<_>>(),
         vec!["Middle", "Alpha", "Zebra"]
     );
-    let descending = filter_and_sort(&jobs, "", "All", &categories, SortColumn::Name, false);
+    let descending = filter_and_sort(
+        &jobs,
+        "",
+        "All",
+        Some(categories.as_slice()),
+        SortColumn::Name,
+        false,
+    );
     assert_eq!(
         descending
             .iter()
